@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
     <div class="sec-lbl">Preview Pesan WhatsApp</div>
     <div class="card">
       <div class="prev-hd">💬 Dikirim ke ekspedisi terpilih</div>
-      <div class="prev-body"><div class="bubble" id="waBubble">— Pilih ekspedisi dan isi detail —</div></div>
+      <div class="prev-body"><div class="bubble" id="waBubble">- Pilih ekspedisi dan isi detail -</div></div>
     </div>
   </div>
 
@@ -271,7 +271,7 @@ function hapusEksp(i) {
 }
 
 function pilihKontak() {
-  if (!navigator.contacts) { toast('Browser tidak support — pakai input manual', 'err'); return; }
+  if (!navigator.contacts) { toast('Browser tidak support - pakai input manual', 'err'); return; }
   navigator.contacts.select(['name','tel'], {multiple:true}).then(function(contacts) {
     if (!contacts.length) return;
     var added = 0;
@@ -382,7 +382,7 @@ function updatePrev() {
   var bbl   = document.getElementById('waBubble');
   if (!bbl) return;
 
-  if (!eksp) { bbl.textContent = '— Pilih ekspedisi terlebih dahulu —'; return; }
+  if (!eksp) { bbl.textContent = '- Pilih ekspedisi terlebih dahulu -'; return; }
 
   var lines = '';
   rows.forEach(function(r, i) {
@@ -500,7 +500,7 @@ function kirimKeGrup(i) {
   var g = grupList[i];
   if (navigator.clipboard) {
     navigator.clipboard.writeText(window._grupMsg || '').then(function() {
-      toast('Pesan disalin — paste di grup WA', 'ok');
+      toast('Pesan disalin - paste di grup WA', 'ok');
       setTimeout(function() { window.open(g.link, '_blank'); }, 600);
     }).catch(function() { window.open(g.link, '_blank'); });
   } else { window.open(g.link, '_blank'); }
@@ -665,7 +665,7 @@ Mohon maaf atas ketidaknyamanan ini.
 PT. UNIFAM - Divisi Logistik';
 
   if (hpEksp) window.open('https://wa.me/' + hpEksp + '?text=' + encodeURIComponent(msg), '_blank');
-  else { navigator.clipboard && navigator.clipboard.writeText(msg); toast('Pesan disalin — kirim manual','ok'); }
+  else { navigator.clipboard && navigator.clipboard.writeText(msg); toast('Pesan disalin - kirim manual','ok'); }
 
   // Notif admin
   var notif = 'ORDER DIBATALKAN
