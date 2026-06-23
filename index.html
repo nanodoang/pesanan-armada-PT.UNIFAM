@@ -390,9 +390,7 @@ function updatePrev() {
     var jam  = r.jam  || '___';
     var tuj  = r.tuj  || '___';
     var tipe = r.tipe || '___';
-    lines += (i+1) + '. ' + tgl + ' | ' + jam + ' WIB
-   ' + tuj + ' | ' + tipe + '
-';
+    lines += (i+1) + '. ' + tgl + ' | ' + jam + ' WIB\n   ' + tuj + ' | ' + tipe + '\n';
   });
 
   var admins = adminList.map(function(a) { return a.no; }).join(',');
@@ -401,18 +399,7 @@ function updatePrev() {
                '&hp_eksp=' + encodeURIComponent(eksp.hp) +
                '&admins=' + encodeURIComponent(admins);
 
-  bbl.textContent =
-    '*ORDER ARMADA - PT. UNIFAM*
-' +
-    'No: *' + noOrd + '* | Eksp: *' + eksp.nama + '*
-
-' +
-    lines +
-    (ket.trim() ? '
-Catatan: ' + ket.trim() + '
-' : '') +
-    '
-Konfirmasi: ' + link;
+  bbl.textContent = '*ORDER ARMADA - PT. UNIFAM*\nNo: *' + noOrd + '* | Eksp: *' + eksp.nama + '*\n\n' + lines + (ket.trim() ? '\nCatatan: ' + ket.trim() + '\n' : '') + '\nKonfirmasi: ' + link;
 }
 
 function fmtTgl(s) {
@@ -640,37 +627,17 @@ function prosesCancel() {
   var listBatal = '';
   cancelSel.forEach(function(i) {
     var o = cancelData[i];
-    listBatal += '
-- ' + o.tuj + ' | ' + o.tgl + ' ' + o.jam + (o.tipe ? ' | ' + o.tipe : '');
+    listBatal += '\n- ' + o.tuj + ' | ' + o.tgl + ' ' + o.jam + (o.tipe ? ' | ' + o.tipe : '');
   });
 
   var tglNow = new Date().toLocaleDateString('id-ID', {day:'2-digit',month:'long',year:'numeric'});
-  var msg =
-    'PEMBATALAN ORDER - PT. UNIFAM
-' + tglNow +
-    '
-
-No. Order : ' + noOrd +
-    '
-Ekspedisi : ' + ekspNama +
-    '
-
-Pesanan berikut dibatalkan:' + listBatal +
-    (alasan ? '
-
-Alasan: ' + alasan : '') +
-    '
-
-Mohon maaf atas ketidaknyamanan ini.
-PT. UNIFAM - Divisi Logistik';
+  var msg = 'PEMBATALAN ORDER - PT. UNIFAM\n' + tglNow + '\n\nNo. Order : ' + noOrd + '\nEkspedisi : ' + ekspNama + '\n\nPesanan berikut dibatalkan:' + listBatal + (alasan ? '\n\nAlasan: ' + alasan : '') + '\n\nMohon maaf atas ketidaknyamanan ini.\nPT. UNIFAM - Divisi Logistik';
 
   if (hpEksp) window.open('https://wa.me/' + hpEksp + '?text=' + encodeURIComponent(msg), '_blank');
   else { navigator.clipboard && navigator.clipboard.writeText(msg); toast('Pesan disalin - kirim manual','ok'); }
 
   // Notif admin
-  var notif = 'ORDER DIBATALKAN
-No: ' + noOrd + ' | Eksp: ' + ekspNama + listBatal + (alasan ? '
-Alasan: ' + alasan : '');
+  var notif = 'ORDER DIBATALKAN\nNo: ' + noOrd + ' | Eksp: ' + ekspNama + listBatal + (alasan ? '\nAlasan: ' + alasan : '');
   setTimeout(function() {
     adminList.forEach(function(a, idx) {
       setTimeout(function() {
