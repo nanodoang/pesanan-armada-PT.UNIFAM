@@ -156,12 +156,97 @@ const noOrder = decodeURIComponent(params.get('order') || '');
 const eksp    = decodeURIComponent(params.get('eksp')  || '');
 const GAS_URL = decodeURIComponent(params.get('gas')   || 'https://script.google.com/macros/s/AKfycbwsnwTE2OMvtdChUIY9cTH3idqXFZ-hOyMCPu3n_whPholWZg_FTkMOCfpzdxLdNbnTDw/exec');
 
-let orderList = []; // [{tgl, jam, tuj}]
+// ── SUMBER DATA HARGA (publish CSV) ──
+const HARGA_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=591450213&single=true&output=csv';
+
+let orderList  = []; // [{tgl, jam, tuj, tipe}]
+let hargaData  = []; // [{dest, vtype, price, expedition}]
+
+// Format angka Indonesia → number. "Rp10.150.000,00" → 10150000
+function toNumber(str){
+  if(str === null || str === undefined) return 0;
+  let s = String(str).replace(/Rp/gi,'').replace(/\s/g,'').trim();
+  if(!s) return 0;
+  // buang ",00" desimal di akhir, lalu hapus titik ribuan
+  s = s.replace(/,\d{1,2}$/,'').replace(/\./g,'').replace(/,/g,'');
+  return parseInt(s,10) || 0;
+}
+function rupiah(n){ return 'Rp ' + (n||0).toLocaleString('id-ID'); }
+
+// Parser CSV sederhana (mendukung kutip & koma di dalam sel)
+function parseCSV(text){
+  const rows = [];
+  let cur = [], val = '', inQ = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQ){
+      if(c === '"'){ if(text[i+1]==='"'){ val+='"'; i++; } else inQ=false; }
+      else val += c;
+    } else {
+      if(c === '"') inQ = true;
+      else if(c === ',') { cur.push(val); val=''; }
+      else if(c === '\n'){ cur.push(val); rows.push(cur); cur=[]; val=''; }
+      else if(c === '\r'){ /* skip */ }
+      else val += c;
+    }
+  }
+  if(val.length || cur.length){ cur.push(val); rows.push(cur); }
+  return rows;
+}
+
+// Normalisasi teks untuk pencocokan (lowercase, rapikan spasi)
+function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
+async function loadHarga(){
+  try{
+    const res = await fetch(HARGA_CSV);
+    const txt = await res.text();
+    const rows = parseCSV(txt);
+    if(!rows.length) return;
+    const head = rows[0].map(h => norm(h));
+    const idx = (names) => head.findIndex(h => names.some(n => h.includes(n)));
+    const iVtype = idx(['vehicle']);
+    const iDest  = idx(['description','tujuan']); // nama kota
+    const iPrice = idx(['price','harga']);
+    const iExp   = idx(['expedition','ekspedisi']);
+    hargaData = rows.slice(1)
+      .filter(r => r.length > 1)
+      .map(r => ({
+        vtype: r[iVtype] || '',
+        dest : r[iDest]  || '',
+        price: toNumber(r[iPrice]),
+        expedition: iExp >= 0 ? (r[iExp]||'') : ''
+      }))
+      .filter(r => r.dest && r.price > 0);
+  }catch(e){
+    console.warn('Gagal load harga:', e);
+    hargaData = [];
+  }
+}
+
+// Lookup harga: ekspedisi + tujuan (nama) + jenis kendaraan
+function lookupHarga(ekspCode, tujuan, tipe){
+  if(!hargaData.length) return null;
+  const e = norm(ekspCode), t = norm(tujuan), v = norm(tipe);
+  const destMatch = (h) => norm(h.dest) === t || norm(h.dest).includes(t) || t.includes(norm(h.dest));
+  // 1) cocok ekspedisi + tujuan + tipe (paling akurat)
+  let hit = hargaData.find(h => norm(h.expedition) === e && destMatch(h) && norm(h.vtype) === v);
+  // 2) cocok ekspedisi + tujuan (tipe kosong / tak ketemu)
+  if(!hit && !v) hit = hargaData.find(h => norm(h.expedition) === e && destMatch(h));
+  // 3) tanpa ekspedisi: tujuan + tipe
+  if(!hit) hit = hargaData.find(h => destMatch(h) && norm(h.vtype) === v);
+  // 4) tujuan saja
+  if(!hit && !v) hit = hargaData.find(h => destMatch(h));
+  return hit || null;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('disp-order').textContent = noOrder || '—';
   document.getElementById('disp-eksp').textContent  = eksp    || '—';
   document.getElementById('empty-msg').style.display = 'block';
+
+  // Muat data harga dulu (paralel, tidak memblok)
+  loadHarga();
 
   if (GAS_URL && noOrder) {
     loadOrderJSONP();
@@ -212,7 +297,7 @@ function renderOrderCards() {
         <div class="oc-num">${i+1}</div>
         <div class="oc-info">
           <div class="oc-tgl">📅 ${o.tgl} &nbsp;⏰ ${o.jam} WIB</div>
-          <div class="oc-tuj">📍 ${o.tuj}${o.tipe ? ' &nbsp;|&nbsp; 🚛 <b>'+o.tipe+'</b>' : ''}</div>
+          <div class="oc-tuj">📍 ${o.tuj}${o.tipe ? ' &nbsp;|&nbsp; 🚛 <b>'+o.tipe+'</b>' : ''}${o.eksp_code ? ' &nbsp;|&nbsp; 🏷️ <b>'+o.eksp_code+'</b>' : ''}</div>
         </div>
       </div>
       <div class="oc-toggle-row">
@@ -240,6 +325,18 @@ function renderOrderCards() {
           <label>Estimasi Jam Tiba</label>
           <input type="time" id="est-${i}">
         </div>
+        <div class="oc-field">
+          <label>ETD <span style="color:var(--text3);font-weight:400">(Estimasi Berangkat)</span></label>
+          <input type="date" id="etd-${i}">
+        </div>
+        <div class="oc-field">
+          <label>ETA <span style="color:var(--text3);font-weight:400">(Estimasi Tiba)</span></label>
+          <input type="date" id="eta-${i}">
+        </div>
+        <div class="oc-field" id="harga-field-${i}">
+          <label>Harga Pengiriman</label>
+          <div id="harga-box-${i}" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--green-bg);font-size:15px;font-weight:700;color:var(--green-dim)">—</div>
+        </div>
       </div>
       <div class="oc-alasan" id="oc-alasan-${i}">
         <div class="oc-field">
@@ -253,6 +350,33 @@ function renderOrderCards() {
 
   document.getElementById('progress-text').style.display = 'block';
   updateProgress();
+  applyHargaToCards();
+  ensureHargaLoaded(8);
+}
+
+// Isi kotak harga tiap kartu berdasarkan tujuan + tipe kendaraan
+function applyHargaToCards(){
+  orderList.forEach((o, i) => {
+    const box = document.getElementById(`harga-box-${i}`);
+    if(!box) return;
+    const hit = lookupHarga(o.eksp_code, o.tuj, o.tipe);
+    if(hit){
+      box.textContent = rupiah(hit.price);
+      box.dataset.harga = hit.price;
+      box.dataset.eksp  = hit.expedition || o.eksp_code || '';
+    }else{
+      box.textContent = 'Harga belum tersedia';
+      box.style.color = 'var(--text3)';
+      box.style.background = 'var(--bg)';
+      box.dataset.harga = 0;
+    }
+  });
+}
+
+// Kalau harga belum termuat saat render, isi ulang begitu siap
+function ensureHargaLoaded(retries){
+  if(hargaData.length){ applyHargaToCards(); return; }
+  if(retries > 0) setTimeout(() => ensureHargaLoaded(retries-1), 600);
 }
 
 // ── SET STATUS PER ORDER ──
@@ -312,6 +436,7 @@ async function submitAll() {
         timestamp  : new Date().toLocaleString('id-ID'),
         no_order   : noOrder,
         ekspedisi  : eksp,
+        kode_eksp  : o.eksp_code || '',
         tujuan     : o.tuj,
         tgl_muat   : o.tgl,
         jam_muat   : o.jam,
@@ -320,6 +445,9 @@ async function submitAll() {
         nopol      : tersedia ? document.getElementById(`nopol-${i}`).value.trim().toUpperCase() : '',
         no_kontener: tersedia ? (document.getElementById(`kont-${i}`)?.value?.trim()?.toUpperCase()||'') : '',
         est_tiba   : tersedia ? document.getElementById(`est-${i}`).value : '',
+        etd        : tersedia ? (document.getElementById(`etd-${i}`)?.value || '') : '',
+        eta        : tersedia ? (document.getElementById(`eta-${i}`)?.value || '') : '',
+        harga      : tersedia ? (document.getElementById(`harga-box-${i}`)?.dataset.harga || '0') : '',
         alasan     : !tersedia ? document.getElementById(`alasan-${i}`).value.trim() : '',
         status     : status,
       };
@@ -361,6 +489,7 @@ function submitJSONP(data) {
       action      : 'konfirmasi',
       no_order    : data.no_order,
       ekspedisi   : data.ekspedisi,
+      kode_eksp   : data.kode_eksp || '',
       tujuan      : data.tujuan,
       tgl_muat    : data.tgl_muat,
       jam_muat    : data.jam_muat,
@@ -369,6 +498,9 @@ function submitJSONP(data) {
       nopol       : data.nopol,
       no_kontener : data.no_kontener || '',
       est_tiba    : data.est_tiba,
+      etd         : data.etd || '',
+      eta         : data.eta || '',
+      harga       : data.harga || '',
       alasan      : data.alasan,
       status      : data.status,
       timestamp   : data.timestamp,
@@ -405,10 +537,16 @@ function kirimNotifAdmin() {
       const nopol = document.getElementById(`nopol-${i}`)?.value?.trim()?.toUpperCase() || '-';
       const kont  = document.getElementById(`kont-${i}`)?.value?.trim()?.toUpperCase() || '';
       const est   = document.getElementById(`est-${i}`)?.value || '-';
+      const etd   = document.getElementById(`etd-${i}`)?.value || '-';
+      const eta   = document.getElementById(`eta-${i}`)?.value || '-';
+      const hrg   = document.getElementById(`harga-box-${i}`)?.dataset.harga || '0';
+      const hrgTxt = (Number(hrg) > 0) ? rupiah(Number(hrg)) : '-';
       ringkasan += `\n✅ *${o.tuj}*\n`;
       ringkasan += `   Sopir : ${nama} (${hp})\n`;
       ringkasan += `   Nopol : ${nopol}${kont ? ' | Kont: ' + kont : ''}\n`;
+      ringkasan += `   ETD   : ${etd}  |  ETA : ${eta}\n`;
       ringkasan += `   Est.  : ${est} WIB\n`;
+      ringkasan += `   Harga : ${hrgTxt}\n`;
     } else {
       const alasan = document.getElementById(`alasan-${i}`)?.value?.trim() || '-';
       ringkasan += `\n❌ *${o.tuj}* — Tidak Tersedia\n`;

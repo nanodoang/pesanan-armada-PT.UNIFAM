@@ -58,6 +58,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .fld label .req{color:var(--amber)}
 .fld input,.fld select,.fld textarea{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg);width:100%}
 .fld input:focus,.fld select:focus{outline:none;border-color:var(--teal)}
+.dist-sugg{position:relative;margin:-4px 0 8px;border:1px solid var(--border);border-radius:8px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.08);max-height:220px;overflow-y:auto;z-index:50}
+.dist-item{padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0}
+.dist-item:last-child{border-bottom:none}
+.dist-item:hover{background:#F0F9FF}
+.dist-item b{color:var(--navy)}
+.dist-item span{color:#888}
 .fld textarea{resize:none;min-height:60px}
 .fld textarea:focus{outline:none;border-color:var(--teal)}
 .btn-add{width:100%;padding:9px;border:1.5px dashed var(--border2);border-radius:var(--r);background:transparent;font-size:13px;font-weight:600;color:var(--teal);cursor:pointer;font-family:inherit}
@@ -193,6 +199,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 <script>
 var GAS_URL     = 'https://script.google.com/macros/s/AKfycbwsnwTE2OMvtdChUIY9cTH3idqXFZ-hOyMCPu3n_whPholWZg_FTkMOCfpzdxLdNbnTDw/exec';
 var KONFIRM_URL = 'https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/konfirmasi.html';
+// GANTI dengan link "Publish to web > CSV" tab Master Distributor (Kota, Distributor)
+var MASTER_DIST_CSV = 'PASTE_LINK_CSV_MASTER_DISTRIBUTOR_DISINI';
 var K_EKSP      = 'uf_eksp2';
 var K_ADMIN     = 'uf_admin2';
 var K_GRUP      = 'uf_grup2';
@@ -204,12 +212,69 @@ var grupList    = [];
 var rowCount    = 0;
 var cancelData  = [];
 var cancelSel   = [];
+var distData    = []; // [{kota, dist}]
+
+function normTxt(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+// Bersihkan karakter tak terlihat (LRM/RLM/zero-width) dari data sheet
+function cleanTxt(s){ return String(s||'').replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g,'').trim(); }
+
+// Parser CSV sederhana (mendukung kutip & koma dalam sel)
+function parseCSVsimple(text){
+  var rows=[], cur=[], val='', inQ=false;
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(inQ){ if(c==='"'){ if(text[i+1]==='"'){ val+='"'; i++; } else inQ=false; } else val+=c; }
+    else{
+      if(c==='"') inQ=true;
+      else if(c===',') { cur.push(val); val=''; }
+      else if(c==='\n'){ cur.push(val); rows.push(cur); cur=[]; val=''; }
+      else if(c==='\r'){}
+      else val+=c;
+    }
+  }
+  if(val.length||cur.length){ cur.push(val); rows.push(cur); }
+  return rows;
+}
+
+function loadDistributor(){
+  if(!MASTER_DIST_CSV || MASTER_DIST_CSV.indexOf('PASTE_LINK')===0) return;
+  fetch(MASTER_DIST_CSV).then(function(r){return r.text();}).then(function(txt){
+    var rows=parseCSVsimple(txt);
+    if(!rows.length) return;
+    var head=rows[0].map(function(h){return normTxt(h);});
+    // Kolom: "Kota"/"Province" (index 0) + "Delivery Name" (nama distributor lengkap)
+    var iKota=head.findIndex(function(h){return h.indexOf('kota')>=0||h.indexOf('province')>=0;});
+    var iDeliv=head.findIndex(function(h){return h.indexOf('delivery')>=0||h.indexOf('distributor')>=0||h.indexOf('dist')>=0;});
+    if(iKota<0) iKota=0;
+    if(iDeliv<0) iDeliv=1;
+    var seen={};
+    distData=rows.slice(1).filter(function(r){return r.length>1;}).map(function(r){
+      return { kota:cleanTxt(r[iKota]), dist:cleanTxt(r[iDeliv]) };
+    }).filter(function(r){
+      if(!r.kota || !r.dist) return false;
+      var key=normTxt(r.dist);
+      if(seen[key]) return false; // buang duplikat
+      seen[key]=1;
+      return true;
+    });
+  }).catch(function(e){ console.warn('Gagal load distributor:', e); });
+}
+
+// Cari distributor: cocok di nama kota ATAU di delivery name
+function cariDistributor(q){
+  var t=normTxt(q);
+  if(!t || !distData.length) return [];
+  return distData.filter(function(r){
+    return normTxt(r.kota).indexOf(t)>=0 || normTxt(r.dist).indexOf(t)>=0;
+  }).slice(0,8);
+}
 
 function init() {
   buatNoOrder();
   loadEksp();
   loadAdmin();
   loadGrup();
+  loadDistributor();
   tambahRow();
   updatePrev();
 };
@@ -341,13 +406,21 @@ function tambahRow() {
       '<div class="fld"><label>Jam Muat</label>' +
       '<input type="time" id="jam' + id + '" value="08:00" onchange="updatePrev()"></div>' +
     '</div>' +
-    '<div class="fld" style="margin-bottom:8px"><label>Tujuan <span class="req">*</span></label>' +
-    '<input type="text" id="tuj' + id + '" placeholder="Distributor - Kota" oninput="updatePrev()"></div>' +
+    '<div class="fld" style="margin-bottom:8px;position:relative"><label>Tujuan <span class="req">*</span></label>' +
+    '<input type="text" id="tuj' + id + '" autocomplete="off" placeholder="Ketik kota (mis. Manado)" oninput="onTujInput(' + id + ')" onblur="tutupSaran(' + id + ')"></div>' +
+    '<div id="sugg' + id + '" class="dist-sugg" style="display:none"></div>' +
     '<div class="fld"><label>Tipe Kendaraan <span class="req">*</span></label>' +
     '<select id="tipe' + id + '" onchange="updatePrev()">' +
     '<option value="">-- Pilih --</option>' +
     '<option>20 FT</option><option>40 FT</option><option>FUSO 48</option>' +
     '<option>WINGBOX</option><option>CD 17</option><option>FUSO 27</option>' +
+    '</select></div>' +
+    '<div class="fld" style="margin-top:8px"><label>Kode Ekspedisi <span class="req">*</span></label>' +
+    '<select id="kode' + id + '" onchange="updatePrev()">' +
+    '<option value="">-- Pilih --</option>' +
+    '<option>SPA</option><option>KKL</option><option>KML</option>' +
+    '<option>POTENSI EXP</option><option>Pusaka</option><option>SJP</option>' +
+    '<option>LEP</option>' +
     '</select></div>';
   document.getElementById('orderList').appendChild(div);
   updatePrev();
@@ -361,6 +434,34 @@ function hapusRow(id) {
   updatePrev();
 }
 
+// AUTOCOMPLETE DISTRIBUTOR
+function onTujInput(id){
+  updatePrev();
+  var inp=document.getElementById('tuj'+id);
+  var box=document.getElementById('sugg'+id);
+  if(!inp||!box) return;
+  var hasil=cariDistributor(inp.value);
+  if(!hasil.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.innerHTML=hasil.map(function(r){
+    var val=r.dist.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+    return '<div class="dist-item" onmousedown="pilihDist('+id+',&quot;'+val+'&quot;)">'+
+           '<b>'+r.dist+'</b></div>';
+  }).join('');
+  box.style.display='block';
+}
+function pilihDist(id, val){
+  var inp=document.getElementById('tuj'+id);
+  if(inp){ inp.value=val; }
+  tutupSaran(id);
+  updatePrev();
+}
+function tutupSaran(id){
+  setTimeout(function(){
+    var box=document.getElementById('sugg'+id);
+    if(box){ box.style.display='none'; }
+  }, 150);
+}
+
 function getRows() {
   return Array.from(document.querySelectorAll('.orow')).map(function(row) {
     var id = row.id.replace('row','');
@@ -369,6 +470,7 @@ function getRows() {
       jam : (document.getElementById('jam'  + id) || {}).value || '',
       tuj : ((document.getElementById('tuj' + id) || {}).value || '').trim(),
       tipe: (document.getElementById('tipe' + id) || {}).value || '',
+      kode: (document.getElementById('kode' + id) || {}).value || '',
     };
   });
 }
@@ -412,6 +514,7 @@ function kirimWA() {
   var rows = getRows();
   if (rows.some(function(r) { return !r.tuj; }))  { toast('Tujuan wajib diisi!', 'err'); return; }
   if (rows.some(function(r) { return !r.tipe; })) { toast('Tipe kendaraan wajib dipilih!', 'err'); return; }
+  if (rows.some(function(r) { return !r.kode; })) { toast('Kode ekspedisi wajib dipilih!', 'err'); return; }
 
   var eksp  = ekspList[selIdx];
   var noOrd = document.getElementById('noOrd').textContent;
