@@ -74,6 +74,11 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .btn-status.tersedia.active{background:var(--green-bg);border-color:var(--green);color:var(--green)}
 .btn-status.tidak.active{background:#FEF2F2;border-color:var(--red);color:var(--red)}
 
+/* TOMBOL HARGA SESUAI / TIDAK */
+.btn-harga{flex:1;padding:9px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text2);transition:.15s}
+.btn-harga.sesuai.active{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.btn-harga.tidak.active{background:#FEF2F2;border-color:var(--red);color:var(--red)}
+
 /* SUBMIT */
 .btn-submit{width:100%;padding:14px;background:#0D1F3C;color:#fff;border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;letter-spacing:-.1px;transition:.15s}
 .btn-submit:hover{background:#17A8A8}
@@ -154,7 +159,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 const params  = new URLSearchParams(window.location.search);
 const noOrder = decodeURIComponent(params.get('order') || '');
 const eksp    = decodeURIComponent(params.get('eksp')  || '');
-const GAS_URL = decodeURIComponent(params.get('gas')   || 'https://script.google.com/macros/s/AKfycbwsnwTE2OMvtdChUIY9cTH3idqXFZ-hOyMCPu3n_whPholWZg_FTkMOCfpzdxLdNbnTDw/exec');
+const GAS_URL = decodeURIComponent(params.get('gas')   || 'https://script.google.com/macros/s/AKfycbxzZReWvX5aY_7Tfxa3p5YCBQzd1GDc9xedWC5pYJTxfADpM8uCtO0eETO8oLzrZT5ZeA/exec');
 
 // ── SUMBER DATA HARGA (publish CSV) ──
 const HARGA_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=591450213&single=true&output=csv';
@@ -336,6 +341,14 @@ function renderOrderCards() {
         <div class="oc-field" id="harga-field-${i}">
           <label>Harga Pengiriman</label>
           <div id="harga-box-${i}" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--green-bg);font-size:15px;font-weight:700;color:var(--green-dim)">—</div>
+          <div class="harga-confirm-row" id="harga-confirm-${i}" style="display:flex;gap:8px;margin-top:8px">
+            <button type="button" class="btn-harga sesuai" id="hb-ok-${i}" onclick="setHargaStatus(${i}, true)">✓ Sesuai</button>
+            <button type="button" class="btn-harga tidak" id="hb-no-${i}" onclick="setHargaStatus(${i}, false)">✕ Tidak Sesuai</button>
+          </div>
+          <div id="harga-manual-${i}" style="display:none;margin-top:8px">
+            <label style="display:block;margin-bottom:4px">Harga Sesuai Ekspedisi <span class="req">*</span></label>
+            <input type="text" id="harga-input-${i}" inputmode="numeric" placeholder="Mis: 20.000.000" oninput="formatHargaInput(${i})">
+          </div>
         </div>
       </div>
       <div class="oc-alasan" id="oc-alasan-${i}">
@@ -371,6 +384,42 @@ function applyHargaToCards(){
       box.dataset.harga = 0;
     }
   });
+}
+
+// ── HARGA: SESUAI / TIDAK SESUAI ──
+// hargaStatus[i] = 'sesuai' | 'tidak' | undefined
+const hargaStatus = {};
+
+function setHargaStatus(i, sesuai){
+  hargaStatus[i] = sesuai ? 'sesuai' : 'tidak';
+  const okBtn = document.getElementById(`hb-ok-${i}`);
+  const noBtn = document.getElementById(`hb-no-${i}`);
+  const manual = document.getElementById(`harga-manual-${i}`);
+  if(okBtn) okBtn.classList.toggle('active', sesuai);
+  if(noBtn) noBtn.classList.toggle('active', !sesuai);
+  if(manual) manual.style.display = sesuai ? 'none' : 'block';
+  if(sesuai){
+    const inp = document.getElementById(`harga-input-${i}`);
+    if(inp) inp.value = '';
+  }
+}
+
+// Format input harga manual dengan pemisah ribuan saat mengetik
+function formatHargaInput(i){
+  const inp = document.getElementById(`harga-input-${i}`);
+  if(!inp) return;
+  const angka = toNumber(inp.value);
+  inp.value = angka ? angka.toLocaleString('id-ID') : '';
+}
+
+// Ambil harga final per order: manual jika 'tidak sesuai', else harga otomatis
+function getHargaFinal(i){
+  if(hargaStatus[i] === 'tidak'){
+    const inp = document.getElementById(`harga-input-${i}`);
+    return toNumber(inp ? inp.value : 0);
+  }
+  const box = document.getElementById(`harga-box-${i}`);
+  return Number(box ? (box.dataset.harga || 0) : 0);
 }
 
 // Kalau harga belum termuat saat render, isi ulang begitu siap
@@ -420,6 +469,13 @@ async function submitAll() {
       if (!nama || !hp || !nopol) {
         return toast(`Lengkapi data sopir untuk pesanan #${i+1}`,'err');
       }
+      // Validasi konfirmasi harga
+      if (!hargaStatus[i]) {
+        return toast(`Pilih ✓/✕ harga untuk pesanan #${i+1}`,'err');
+      }
+      if (hargaStatus[i] === 'tidak' && getHargaFinal(i) <= 0) {
+        return toast(`Isi harga manual untuk pesanan #${i+1}`,'err');
+      }
     }
   }
 
@@ -447,7 +503,8 @@ async function submitAll() {
         est_tiba   : tersedia ? document.getElementById(`est-${i}`).value : '',
         etd        : tersedia ? (document.getElementById(`etd-${i}`)?.value || '') : '',
         eta        : tersedia ? (document.getElementById(`eta-${i}`)?.value || '') : '',
-        harga      : tersedia ? (document.getElementById(`harga-box-${i}`)?.dataset.harga || '0') : '',
+        harga      : tersedia ? String(getHargaFinal(i)) : '',
+        harga_status: tersedia ? (hargaStatus[i]==='tidak' ? 'Tidak Sesuai (Manual)' : 'Sesuai') : '',
         alasan     : !tersedia ? document.getElementById(`alasan-${i}`).value.trim() : '',
         status     : status,
       };
@@ -501,6 +558,7 @@ function submitJSONP(data) {
       etd         : data.etd || '',
       eta         : data.eta || '',
       harga       : data.harga || '',
+      harga_status: data.harga_status || '',
       alasan      : data.alasan,
       status      : data.status,
       timestamp   : data.timestamp,
@@ -539,14 +597,15 @@ function kirimNotifAdmin() {
       const est   = document.getElementById(`est-${i}`)?.value || '-';
       const etd   = document.getElementById(`etd-${i}`)?.value || '-';
       const eta   = document.getElementById(`eta-${i}`)?.value || '-';
-      const hrg   = document.getElementById(`harga-box-${i}`)?.dataset.harga || '0';
-      const hrgTxt = (Number(hrg) > 0) ? rupiah(Number(hrg)) : '-';
+      const hrg   = getHargaFinal(i);
+      const hrgTxt = (hrg > 0) ? rupiah(hrg) : '-';
+      const hrgLbl = hargaStatus[i]==='tidak' ? ' (manual)' : (hargaStatus[i]==='sesuai' ? ' ✓' : '');
       ringkasan += `\n✅ *${o.tuj}*\n`;
       ringkasan += `   Sopir : ${nama} (${hp})\n`;
       ringkasan += `   Nopol : ${nopol}${kont ? ' | Kont: ' + kont : ''}\n`;
       ringkasan += `   ETD   : ${etd}  |  ETA : ${eta}\n`;
       ringkasan += `   Est.  : ${est} WIB\n`;
-      ringkasan += `   Harga : ${hrgTxt}\n`;
+      ringkasan += `   Harga : ${hrgTxt}${hrgLbl}\n`;
     } else {
       const alasan = document.getElementById(`alasan-${i}`)?.value?.trim() || '-';
       ringkasan += `\n❌ *${o.tuj}* — Tidak Tersedia\n`;
