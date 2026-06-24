@@ -231,9 +231,9 @@ async function loadHarga(){
 
 // Pemetaan label tipe (order) → istilah Vehicle Type di sheet harga
 const TIPE_MAP = {
-  '20" 32'        : 'Kontainer-20" 32',
-  '20" 32 combo'  : 'Kontainer-20" 32 (C)',
-  '40" hq 72'     : 'Kontainer-40"HQ 72'
+  '20 ft'      : 'Kontainer-20" 32',
+  '20 ft c'    : 'Kontainer-20" 32 (C)',
+  '40 ft'      : 'Kontainer-40"HQ 72'
 };
 function mapTipe(tipe){
   const key = norm(tipe);
@@ -300,6 +300,19 @@ function loadOrderJSONP() {
 }
 
 // ── RENDER KARTU PER ORDER ──
+// Opsi jam kelipatan 30 menit (00:00 s/d 23:30)
+function jamOptions(){
+  let opt = '<option value="">-- Pilih jam --</option>';
+  for(let h=0; h<24; h++){
+    for(let m=0; m<60; m+=30){
+      const hh = String(h).padStart(2,'0');
+      const mm = String(m).padStart(2,'0');
+      opt += `<option value="${hh}:${mm}">${hh}:${mm}</option>`;
+    }
+  }
+  return opt;
+}
+
 function renderOrderCards() {
   const container = document.getElementById('order-cards');
   container.innerHTML = '';
@@ -339,7 +352,7 @@ function renderOrderCards() {
         </div>
         <div class="oc-field">
           <label>Estimasi Jam Tiba</label>
-          <input type="time" id="est-${i}">
+          <select id="est-${i}">${jamOptions()}</select>
         </div>
         <div class="oc-field">
           <label>ETD <span style="color:var(--text3);font-weight:400">(Estimasi Berangkat)</span></label>
