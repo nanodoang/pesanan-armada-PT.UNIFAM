@@ -123,6 +123,13 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .btn-klik:disabled{opacity:.3;cursor:default}
 .tbl-rownum{text-align:center;color:var(--text3);font-weight:600}
 .tbl-na{color:var(--text3);font-style:italic}
+.st-badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700;white-space:nowrap}
+.st-belum{background:#FEF3C7;color:#B45309}
+.st-tidak{background:#FEE2E2;color:#B91C1C}
+.st-baru{background:#E0F2FE;color:#0369A1}
+.row-belum{background:#FFFBEB !important}
+.row-tidak{background:#FEF2F2 !important;opacity:.7}
+.jam-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}
 </style>
 </head>
 <body>
@@ -131,7 +138,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v6</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v9</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -158,7 +165,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <textarea id="paste-area" placeholder="Tempel dari Excel (kolom No, Tanggal, Destination dipisah tab/koma). Contoh:&#10;1&#9;02-Jan-26&#9;PT. Borwita Citra Prima - MANADO&#10;2&#9;02-Jan-26&#9;CV. Mitra - TORAJA"></textarea>
         <button class="btn-parse" onclick="parsePaste()">Proses Teks</button>
       </div>
-      <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Truck Type</b>.</p>
+      <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Kubikasi, Truck Type</b>.</p>
     </div>
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
@@ -388,16 +395,30 @@ function parseTanggal(raw){
 // Susun rows dari array baris [{no,tgl,dest}]
 function buildRowsFrom(records){
   if(!records.length){ toast('Tidak ada data terbaca','err'); return; }
-  rows = records.map(rec=>({
+  const baru = records.map(rec=>({
     id: ++rowSeq,
     tuj: cleanTxt(rec.dest||''),
     tgl: parseTanggal(rec.tgl),
+    jam: '',
+    kubik: cleanTxt(rec.kubik||''),
     tipe: normalizeTipe(cleanTxt(rec.tipe||'')),
+    status: 'Baru',           // order baru dari upload (belum tersimpan)
     pilihEksp: '', pilihHarga: 0
   })).filter(r=>r.tuj);
-  if(!rows.length){ toast('Kolom Destination kosong semua','err'); return; }
+  if(!baru.length){ toast('Kolom Destination kosong semua','err'); return; }
+  rows = rows.concat(baru);   // TAMBAH ke daftar (tidak mengganti)
   renderRows();
-  toast(rows.length+' order dimuat dari Sheet','ok');
+  toast(baru.length+' order ditambahkan','ok');
+}
+
+// Opsi jam kelipatan 30 menit
+function jamOptions(sel){
+  let opt='<option value="">--:--</option>';
+  for(let h=0;h<24;h++) for(let m=0;m<60;m+=30){
+    const hh=String(h).padStart(2,'0'), mm=String(m).padStart(2,'0'), v=hh+':'+mm;
+    opt+=`<option value="${v}" ${sel===v?'selected':''}>${v}</option>`;
+  }
+  return opt;
 }
 
 // Samakan label truck dari sheet ke pilihan standar (toleran spasi/kapital)
@@ -419,15 +440,16 @@ function normalizeTipe(t){
 // Deteksi kolom dari header / posisi
 function recordsFromMatrix(matrix){
   if(!matrix.length) return [];
-  let start=0, iNo=0, iTgl=1, iDest=2, iTipe=3;
+  let start=0, iNo=0, iTgl=1, iDest=2, iKubik=3, iTipe=4;
   const head=matrix[0].map(c=>norm(c));
-  const hasHeader = head.some(c=>c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('type'));
+  const hasHeader = head.some(c=>c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('type')||c.includes('kubik'));
   if(hasHeader){
     const fNo=head.findIndex(c=>c==='no'||c.includes('no.'));
     const fT=head.findIndex(c=>c.includes('tanggal')||c.includes('tgl')||c.includes('date'));
     const fD=head.findIndex(c=>c.includes('dest')||c.includes('tujuan')||c.includes('delivery'));
+    const fKub=head.findIndex(c=>c.includes('kubik')||c.includes('cbm')||c.includes('volume'));
     const fK=head.findIndex(c=>c.includes('truck')||c.includes('type')||c.includes('kendaraan')||c.includes('tipe'));
-    if(fNo>=0)iNo=fNo; if(fT>=0)iTgl=fT; if(fD>=0)iDest=fD; if(fK>=0)iTipe=fK;
+    if(fNo>=0)iNo=fNo; if(fT>=0)iTgl=fT; if(fD>=0)iDest=fD; if(fKub>=0)iKubik=fKub; if(fK>=0)iTipe=fK;
     start=1;
   }
   const out=[];
@@ -435,7 +457,7 @@ function recordsFromMatrix(matrix){
     const row=matrix[i]; if(!row||!row.length) continue;
     const dest=row[iDest], tgl=row[iTgl];
     if(dest==null && tgl==null) continue;
-    out.push({ no:row[iNo], tgl:tgl, dest:dest, tipe:row[iTipe] });
+    out.push({ no:row[iNo], tgl:tgl, dest:dest, kubik:row[iKubik], tipe:row[iTipe] });
   }
   return out;
 }
@@ -486,7 +508,7 @@ function renderTable(){
   if(!tbl) return;
   // Header
   let head='<thead><tr>'+
-    '<th>No</th><th>Tanggal</th><th>Destination</th><th>Truck</th>'+
+    '<th>No</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
     '<th class="grp1">EXP</th><th class="grp1">Rate</th><th>Rank</th>';
   for(let k=1;k<=4;k++){
     head+=`<th class="grp2">Rank ${k}</th><th class="grp2">Rate</th><th class="grp2"></th>`;
@@ -513,10 +535,19 @@ function renderTable(){
       }
     }
     const dest = r.tuj ? r.tuj : '<span class="tbl-na">(belum diisi)</span>';
-    body+=`<tr>
+    // status badge + warna baris
+    const st = r.status || 'Baru';
+    let badge, rowClass;
+    if(st==='Belum'){ badge='<span class="st-badge st-belum">⏳ Belum</span>'; rowClass='row-belum'; }
+    else if(st==='Tidak'){ badge='<span class="st-badge st-tidak">❌ Tidak</span>'; rowClass='row-tidak'; }
+    else { badge='<span class="st-badge st-baru">🆕 Baru</span>'; rowClass=''; }
+    body+=`<tr class="${rowClass}">
       <td class="tbl-rownum">${i+1}</td>
-      <td>${r.tgl?fmtTgl(r.tgl):'<span class="tbl-na">-</span>'}</td>
+      <td>${badge}</td>
+      <td>${r.tgl?fmtTgl(r.tgl):(r.tglText||'<span class="tbl-na">-</span>')}</td>
+      <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
+      <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
       <td>${r.tipe||'<span class="tbl-na">-</span>'}</td>
       ${expCell}
       <td class="tbl-rownum">${rank.length||'-'}</td>
@@ -641,7 +672,8 @@ function buildPesan(eksp){
 
   // siapkan data simpan (orderRows untuk GSheet)
   const orderRows=items.map(r=>({
-    tgl: fmtTgl(r.tgl), jam:'', tuj:r.tuj, tipe:r.tipe, kode:eksp
+    tgl: fmtTgl(r.tgl), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
+    kubik: r.kubik||'', harga: r.pilihHarga||0
   }));
   currentBatch={ noOrd, eksp, msg, orderRows };
 }
@@ -681,6 +713,37 @@ function waNomorEksp(eksp){
   return ''; // tidak ada kolom HP di sheet harga; WA buka tanpa nomor, user pilih kontak
 }
 
+// ============ LOAD ORDER BELUM SELESAI DARI SHEET ============
+function loadFromSheet(){
+  const cb='cbPlan'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(!resp || !resp.items){ return; }
+    const fromSheet = resp.items.map(it=>({
+      id: ++rowSeq,
+      tuj: it.tuj||'',
+      tgl: '', // tgl di sheet sudah teks; biarkan kosong utk date input, tampilkan apa adanya
+      tglText: it.tgl||'',
+      jam: it.jam||'',
+      kubik: it.kubik||'',
+      tipe: normalizeTipe(it.tipe||''),
+      status: (String(it.status||'').toLowerCase().indexOf('tidak')>=0)?'Tidak':'Belum',
+      pilihEksp: it.kode_eksp||it.ekspedisi||'',
+      pilihHarga: Number(it.harga)||0,
+      noOrder: it.no_order||'',
+      fromSheet:true
+    }));
+    // taruh order Sheet di ATAS daftar
+    rows = fromSheet.concat(rows.filter(r=>!r.fromSheet));
+    renderRows();
+    if(fromSheet.length) toast(fromSheet.length+' order belum selesai dimuat','ok');
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getplanning&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; };
+  document.body.appendChild(sc);
+}
+
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded',()=>{
   const url = new URL(window.location.href);
@@ -688,7 +751,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(csvOverride){ HARGA_CSV = csvOverride; }
   loadHarga();
   loadDist();
-  renderRows(); // tabel kosong, menunggu upload/paste
+  renderRows();
+  loadFromSheet(); // tampilkan order belum selesai dari Sheet
 });
 </script>
 </body>
