@@ -139,7 +139,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v12</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v13</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -553,7 +553,7 @@ function renderTable(){
 
   let body='<tbody>';
   rows.forEach((r,i)=>{
-    const rank = (r.tuj && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
+    const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     const expCell = r.pilihEksp
       ? `<td class="cell-exp">${r.pilihEksp}</td><td class="cell-rate">${rupiah(r.pilihHarga)}</td>`
       : `<td class="cell-exp empty">— pilih —</td><td class="cell-rate empty">—</td>`;
