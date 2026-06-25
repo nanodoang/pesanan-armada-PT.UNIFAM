@@ -141,7 +141,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v17</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v19</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -427,21 +427,26 @@ function parseTanggal(raw){
 function buildRowsFrom(records){
   if(!records.length){ toast('Tidak ada data terbaca','err'); return; }
   const baru = records.map(rec=>({
-    id: ++rowSeq,
     tuj: cleanTxt(rec.dest||''),
-    tgl: parseTanggal(rec.tgl),
+    tgl: parseTanggal(rec.tgl) || cleanTxt(rec.tgl||''),
     jam: '',
     sales: cleanTxt(rec.sales||''),
     total: cleanTxt(rec.total||''),
     kubik: cleanTxt(rec.kubik||''),
     tipe: normalizeTipe(cleanTxt(rec.tipe||'')),
-    status: 'Baru',
-    pilihEksp: '', pilihHarga: 0
+    pilihEksp: '', pilihHarga: ''
   })).filter(r=>r.tuj);
-  if(!baru.length){ toast('Kolom Destination kosong semua','err'); return; }
-  rows = rows.concat(baru);   // TAMBAH ke daftar (tidak mengganti)
-  renderRows();
-  toast(baru.length+' order ditambahkan','ok');
+  if(!baru.length){ toast('Kolom tujuan kosong semua','err'); return; }
+  // simpan ke Sheet draft (semua admin lihat)
+  toast('Menyimpan '+baru.length+' order ke Sheet…','ok');
+  gasJSONP('action=adddraft&items='+encodeURIComponent(JSON.stringify(baru)), function(resp){
+    if(resp && resp.status==='ok'){
+      toast(baru.length+' order tersimpan','ok');
+      loadDraft(); // reload dari Sheet
+    }else{
+      toast('Gagal simpan ke Sheet','err');
+    }
+  });
 }
 
 // Opsi jam kelipatan 30 menit
@@ -542,8 +547,34 @@ function addRow(){
   renderRows();
 }
 function delRow(id){
+  const r=rows.find(x=>x.id===id);
+  if(r && r.isDraft && r.draft_id){
+    gasJSONP('action=deldraft&draft_id='+encodeURIComponent(r.draft_id));
+  }
   rows=rows.filter(r=>r.id!==id);
   renderRows();
+}
+
+// ===== Draft order tersimpan di Google Sheet (multi-admin) =====
+// helper kirim ke GAS via JSONP
+function gasJSONP(params, onResp){
+  const cb='cbG'+Date.now()+Math.floor(Math.random()*1000);
+  window[cb]=function(resp){ delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc); if(onResp) onResp(resp); };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?'+params+'&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; if(onResp) onResp(null); };
+  document.body.appendChild(sc);
+}
+
+// simpanDraft tidak dipakai lagi (digantikan update per-field ke Sheet)
+function simpanDraft(){ /* no-op: draft kini di Sheet */ }
+
+// update 1 field draft ke Sheet
+function updateDraftField(r, field){
+  if(!r || !r.draft_id) return;
+  const val = r[field]!=null ? r[field] : '';
+  gasJSONP('action=updatedraft&draft_id='+encodeURIComponent(r.draft_id)+
+           '&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(val));
 }
 function renderRows(){
   renderTable();
@@ -621,8 +652,8 @@ function renderTable(){
   }
 }
 
-function setField(id,key,val){ const r=rows.find(x=>x.id===id); if(r){ r[key]=val; } if(key==='tgl') renderTable(); }
-function setTipe(id,val){ const r=rows.find(x=>x.id===id); if(r){ r.tipe=val; r.pilihEksp=''; r.pilihHarga=0; } renderTable(); }
+function setField(id,key,val){ const r=rows.find(x=>x.id===id); if(r){ r[key]=val; if(r.isDraft) updateDraftField(r,key); } if(key==='tgl') renderTable(); }
+function setTipe(id,val){ const r=rows.find(x=>x.id===id); if(r){ r.tipe=val; r.pilihEksp=''; r.pilihHarga=0; if(r.isDraft){ updateDraftField(r,'tipe'); updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); } } renderTable(); }
 
 // autocomplete
 function onTuj(id){
@@ -652,6 +683,7 @@ function pilihEksp(id,eksp,price){
   // toggle: klik lagi yang sama = batal
   if(norm(r.pilihEksp)===norm(eksp)){ r.pilihEksp=''; r.pilihHarga=0; }
   else { r.pilihEksp=eksp; r.pilihHarga=price; }
+  if(r.isDraft){ updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); }
   renderTable();
 }
 
@@ -706,9 +738,10 @@ let currentBatch=null;
 function buildPesan(eksp){
   const items=rows.filter(r=>r.pilihEksp===eksp);
   const noOrd=buatNoOrder();
+  const tglShow=r=> r.tgl?fmtTgl(r.tgl):(r.tglText||'-');
   let lines='';
   items.forEach((r,i)=>{
-    lines += (i+1)+'. '+fmtTgl(r.tgl)+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+    lines += (i+1)+'. '+tglShow(r)+' '+(r.jam||'')+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
   });
   const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrd)+
     '&eksp='+encodeURIComponent(eksp)+
@@ -721,11 +754,11 @@ function buildPesan(eksp){
 
   // siapkan data simpan (orderRows untuk GSheet)
   const orderRows=items.map(r=>({
-    tgl: fmtTgl(r.tgl), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
+    tgl: tglShow(r), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
     kubik: r.kubik||'', harga: r.pilihHarga||0,
     sales: r.sales||'', total: r.total||''
   }));
-  currentBatch={ noOrd, eksp, msg, orderRows };
+  currentBatch={ noOrd, eksp, msg, orderRows, items };
 }
 
 function copyPesan(){
@@ -755,6 +788,16 @@ function kirimBatch(){
   const hp = waNomorEksp(b.eksp);
   const waUrl = 'https://wa.me/'+(hp||'')+'?text='+encodeURIComponent(b.msg);
   window.open(waUrl,'_blank');
+
+  // hapus baris yang sudah dikirim dari draft Sheet & tampilan
+  const sentItems = b.items || [];
+  const draftIds = sentItems.filter(r=>r.isDraft && r.draft_id).map(r=>r.draft_id);
+  if(draftIds.length){
+    gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')));
+  }
+  const sentIds = new Set(sentItems.map(r=>r.id));
+  rows = rows.filter(r=> !sentIds.has(r.id));
+  renderRows();
   toast('Order tersimpan & WA dibuka','ok');
 }
 
@@ -764,43 +807,60 @@ function waNomorEksp(eksp){
 }
 
 // ============ LOAD ORDER BELUM SELESAI DARI SHEET ============
+// muat order final (sudah dikirim, belum dikonfirmasi) dari Order Armada
 function loadFromSheet(silent){
   const cb='cbPlan'+Date.now();
   window[cb]=function(resp){
     delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
-    if(!resp || !resp.items){ return; }
-    // simpan pilihan user pada order Sheet lama (truck/jam/ekspedisi) by key
-    const prev={};
-    rows.filter(r=>r.fromSheet).forEach(r=>{
-      prev[(r.noOrder||'')+'|'+norm(r.tuj)] = {tipe:r.tipe, jam:r.jam, pilihEksp:r.pilihEksp, pilihHarga:r.pilihHarga};
-    });
-    const fromSheet = resp.items.map(it=>{
-      const key=(it.no_order||'')+'|'+norm(it.tuj||'');
-      const p=prev[key]||{};
-      return {
-        id: ++rowSeq,
-        tuj: it.tuj||'',
-        tgl: '',
-        tglText: it.tgl||'',
-        jam: p.jam || it.jam || '',
-        kubik: it.kubik||'',
-        tipe: p.tipe || normalizeTipe(it.tipe||''),
-        status: (String(it.status||'').toLowerCase().indexOf('tidak')>=0)?'Tidak':'Belum',
-        pilihEksp: p.pilihEksp || it.kode_eksp || it.ekspedisi || '',
-        pilihHarga: p.pilihHarga || Number(it.harga)||0,
-        noOrder: it.no_order||'',
-        fromSheet:true
-      };
-    });
-    rows = fromSheet.concat(rows.filter(r=>!r.fromSheet));
+    if(!resp || !resp.items){ renderRows(); return; }
+    const finalRows = resp.items.map(it=>({
+      id: ++rowSeq,
+      tuj: it.tuj||'',
+      tgl: '', tglText: it.tgl||'',
+      jam: it.jam||'',
+      kubik: it.kubik||'',
+      tipe: normalizeTipe(it.tipe||''),
+      status: (String(it.status||'').toLowerCase().indexOf('tidak')>=0)?'Tidak':'Belum',
+      pilihEksp: it.kode_eksp || it.ekspedisi || '',
+      pilihHarga: Number(it.harga)||0,
+      noOrder: it.no_order||'',
+      fromSheet:true, locked:true // order final: tidak diedit di sini
+    }));
+    // gabung: draft (atas) + final (bawah)
+    rows = rows.filter(r=>r.isDraft).concat(finalRows);
     renderRows();
-    if(!silent && fromSheet.length) toast(fromSheet.length+' order dari Sheet','ok');
-    setLastSync();
+    if(!silent) setLastSync();
   };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?action=getplanning&callback='+cb;
-  sc.onerror=function(){ delete window[cb]; };
+  sc.onerror=function(){ delete window[cb]; renderRows(); };
   document.body.appendChild(sc);
+}
+
+// muat draft dari tab Planning Draft (multi-admin)
+function loadDraft(silent){
+  gasJSONP('action=getdraft', function(resp){
+    if(!resp || !resp.items){ if(!silent) loadFromSheet(true); return; }
+    const draftRows = resp.items.map(it=>({
+      id: ++rowSeq,
+      draft_id: it.draft_id,
+      tuj: it.tuj||'',
+      tgl: '', tglText: it.tgl||'',
+      jam: it.jam||'',
+      sales: it.sales||'',
+      total: it.total||'',
+      kubik: it.kubik||'',
+      tipe: normalizeTipe(it.tipe||''),
+      status: 'Baru',
+      pilihEksp: it.pilihEksp||'',
+      pilihHarga: Number(it.pilihHarga)||0,
+      isDraft:true
+    }));
+    rows = draftRows.concat(rows.filter(r=>!r.isDraft));
+    renderRows();
+    setLastSync();
+    loadFromSheet(true); // lalu muat order final juga
+  });
 }
 
 function setLastSync(){
@@ -816,9 +876,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadHarga();
   loadDist();
   renderRows();
-  setTimeout(loadFromSheet, 2000); // muat awal
-  // auto-refresh tiap 30 detik (silent, jaga draft & pilihan)
-  setInterval(()=>loadFromSheet(true), 30000);
+  setTimeout(loadDraft, 1500); // muat draft + final dari Sheet
+  // auto-refresh tiap 30 detik
+  setInterval(()=>loadDraft(true), 30000);
 });
 </script>
 </body>
