@@ -139,7 +139,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v13</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v14</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -645,15 +645,16 @@ function pilihEksp(id,eksp,price){
 
 // ============ TAHAP 2: GROUP ============
 function goGroup(){
-  // validasi
-  if(!rows.length){ toast('Tambah minimal 1 tujuan','err'); return; }
-  for(const r of rows){
-    if(!r.tuj || !r.tgl || !r.tipe){ toast('Lengkapi tujuan, tanggal, kendaraan','err'); return; }
-    if(!r.pilihEksp){ toast('Pilih ekspedisi (ranking) untuk: '+r.tuj,'err'); return; }
+  // hanya proses baris yang sudah dipilih ekspedisinya
+  const dipilih = rows.filter(r=>r.pilihEksp);
+  if(!dipilih.length){ toast('Pilih ekspedisi minimal 1 tujuan dulu','err'); return; }
+  // baris terpilih wajib ada jam muat
+  for(const r of dipilih){
+    if(!r.jam){ toast('Isi Jam Muat untuk: '+r.tuj,'err'); return; }
   }
-  // kumpulkan ekspedisi unik
+  // kumpulkan ekspedisi unik (hanya dari yang dipilih)
   const grup={};
-  rows.forEach(r=>{ const k=r.pilihEksp; (grup[k]=grup[k]||[]).push(r); });
+  dipilih.forEach(r=>{ const k=r.pilihEksp; (grup[k]=grup[k]||[]).push(r); });
   const bar=document.getElementById('grp-bar');
   bar.innerHTML=Object.keys(grup).map(k=>
     `<button class="grp-pill" onclick="pilihGrup(&quot;${k.replace(/"/g,'&quot;')}&quot;)">${k} <span class="cnt">${grup[k].length}</span></button>`
