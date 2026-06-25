@@ -131,7 +131,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v5</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v6</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -158,7 +158,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <textarea id="paste-area" placeholder="Tempel dari Excel (kolom No, Tanggal, Destination dipisah tab/koma). Contoh:&#10;1&#9;02-Jan-26&#9;PT. Borwita Citra Prima - MANADO&#10;2&#9;02-Jan-26&#9;CV. Mitra - TORAJA"></textarea>
         <button class="btn-parse" onclick="parsePaste()">Proses Teks</button>
       </div>
-      <p class="import-hint">Data tujuan dimuat otomatis dari Sheet. <a href="#" onclick="refreshPlanning();return false;" style="color:var(--teal);font-weight:700">↻ Muat ulang dari Sheet</a></p>
+      <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Truck Type</b>.</p>
     </div>
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
@@ -197,7 +197,7 @@ const GAS_URL     = 'https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3s
 const KONFIRM_URL = 'https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/konfirmasi.html';
 let HARGA_CSV     = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=591450213&single=true&output=csv';
 // Data planning (No, Tanggal, Destination) — auto-load dari sheet
-let PLANNING_CSV  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=0&single=true&output=csv';
+let PLANNING_CSV  = ''; // upload/paste manual (tidak auto dari sheet)
 // GANTI dengan link CSV Master Distributor (opsional, utk autocomplete manual)
 const MASTER_DIST_CSV = 'PASTE_LINK_CSV_MASTER_DISTRIBUTOR_DISINI';
 const ADMINS = '6285885549707';
@@ -525,6 +525,21 @@ function renderTable(){
   });
   body+='</tbody>';
   tbl.innerHTML=head+body;
+  // pesan kosong
+  const scroll=tbl.parentNode;
+  let empty=document.getElementById('tbl-empty');
+  if(!rows.length){
+    if(!empty){
+      empty=document.createElement('div');
+      empty.id='tbl-empty';
+      empty.style.cssText='padding:24px;text-align:center;color:var(--text3);font-size:13px';
+      empty.innerHTML='Belum ada data. Upload file atau paste di atas untuk mulai.';
+      scroll.parentNode.insertBefore(empty, scroll.nextSibling);
+    }
+    scroll.style.display='none'; empty.style.display='block';
+  }else{
+    scroll.style.display='block'; if(empty) empty.style.display='none';
+  }
 }
 
 function setField(id,key,val){ const r=rows.find(x=>x.id===id); if(r){ r[key]=val; } if(key==='tgl') renderTable(); }
@@ -671,11 +686,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   const url = new URL(window.location.href);
   const csvOverride = url.searchParams.get('csv');
   if(csvOverride){ HARGA_CSV = csvOverride; }
-  const planOverride = url.searchParams.get('plan');
-  if(planOverride){ PLANNING_CSV = planOverride; }
   loadHarga();
   loadDist();
-  loadPlanning();   // auto isi daftar order dari sheet
+  renderRows(); // tabel kosong, menunggu upload/paste
 });
 </script>
 </body>
