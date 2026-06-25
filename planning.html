@@ -130,6 +130,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .row-belum{background:#FFFBEB !important}
 .row-tidak{background:#FEF2F2 !important;opacity:.7}
 .jam-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}
+.truck-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;font-weight:600}
 </style>
 </head>
 <body>
@@ -138,7 +139,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v9</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v10</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -165,7 +166,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <textarea id="paste-area" placeholder="Tempel dari Excel (kolom No, Tanggal, Destination dipisah tab/koma). Contoh:&#10;1&#9;02-Jan-26&#9;PT. Borwita Citra Prima - MANADO&#10;2&#9;02-Jan-26&#9;CV. Mitra - TORAJA"></textarea>
         <button class="btn-parse" onclick="parsePaste()">Proses Teks</button>
       </div>
-      <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Kubikasi, Truck Type</b>.</p>
+      <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Kubikasi</b> (truck pilih manual di tabel).</p>
     </div>
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
@@ -421,6 +422,14 @@ function jamOptions(sel){
   return opt;
 }
 
+// Opsi jenis truck (pilih manual)
+function truckOptions(sel){
+  const list=['20 FT','20 FT C','40 FT','FUSO 48','WINGBOX','CD 17','FUSO 27'];
+  let opt='<option value="">-- pilih --</option>';
+  list.forEach(t=>{ opt+=`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`; });
+  return opt;
+}
+
 // Samakan label truck dari sheet ke pilihan standar (toleran spasi/kapital)
 function normalizeTipe(t){
   const n=norm(t);
@@ -548,7 +557,7 @@ function renderTable(){
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
       <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
-      <td>${r.tipe||'<span class="tbl-na">-</span>'}</td>
+      <td><select class="truck-sel" onchange="setTipe(${r.id},this.value)">${truckOptions(r.tipe)}</select></td>
       ${expCell}
       <td class="tbl-rownum">${rank.length||'-'}</td>
       ${rankCells}
