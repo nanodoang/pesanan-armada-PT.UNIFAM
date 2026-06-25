@@ -131,7 +131,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v4</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v5</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -291,16 +291,19 @@ function loadPlanning(){
   fetch(PLANNING_CSV).then(r=>r.text()).then(txt=>{
     const matrix=parseCSV(txt);
     const recs=recordsFromMatrix(matrix);
+    // diagnostik: tampilkan jumlah baris mentah & terbaca
+    setHargaStatus('Planning: '+matrix.length+' baris CSV, '+recs.length+' terbaca');
     if(recs.length){
       buildRowsFrom(recs);
     }else{
       rows=[]; renderRows();
-      toast('Data planning kosong di Sheet','err');
+      toast('Planning kosong setelah parse ('+matrix.length+' baris CSV)','err');
     }
   }).catch(e=>{
     console.warn('planning',e);
     rows=[]; renderRows();
-    toast('Gagal muat planning — cek koneksi/publish','err');
+    setHargaStatus('⚠️ Gagal fetch planning: '+e.message);
+    toast('Gagal muat planning','err');
   });
 }
 
