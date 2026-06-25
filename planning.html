@@ -141,8 +141,9 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v15</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v17</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
+    <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
 </div>
 
@@ -430,9 +431,11 @@ function buildRowsFrom(records){
     tuj: cleanTxt(rec.dest||''),
     tgl: parseTanggal(rec.tgl),
     jam: '',
+    sales: cleanTxt(rec.sales||''),
+    total: cleanTxt(rec.total||''),
     kubik: cleanTxt(rec.kubik||''),
     tipe: normalizeTipe(cleanTxt(rec.tipe||'')),
-    status: 'Baru',           // order baru dari upload (belum tersimpan)
+    status: 'Baru',
     pilihEksp: '', pilihHarga: 0
   })).filter(r=>r.tuj);
   if(!baru.length){ toast('Kolom Destination kosong semua','err'); return; }
@@ -475,27 +478,33 @@ function normalizeTipe(t){
   return map[n] || t; // kalau tak dikenali, pakai apa adanya
 }
 
-// Deteksi kolom dari header / posisi
+// Deteksi kolom dari header (format: Tanggal, Sales Admin, Dist, Total Order, Sum of M3, Truck Type)
 function recordsFromMatrix(matrix){
   if(!matrix.length) return [];
-  let start=0, iNo=0, iTgl=1, iDest=2, iKubik=3, iTipe=4;
+  // default posisi sesuai header baru
+  let start=0, iTgl=0, iSales=1, iDest=2, iTotal=3, iKubik=4, iTipe=5;
   const head=matrix[0].map(c=>norm(c));
-  const hasHeader = head.some(c=>c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('type')||c.includes('kubik'));
+  const hasHeader = head.some(c=>c.includes('dist')||c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('m3')||c.includes('sales'));
   if(hasHeader){
-    const fNo=head.findIndex(c=>c==='no'||c.includes('no.'));
     const fT=head.findIndex(c=>c.includes('tanggal')||c.includes('tgl')||c.includes('date'));
-    const fD=head.findIndex(c=>c.includes('dest')||c.includes('tujuan')||c.includes('delivery'));
-    const fKub=head.findIndex(c=>c.includes('kubik')||c.includes('cbm')||c.includes('volume'));
+    const fSales=head.findIndex(c=>c.includes('sales')||c.includes('admin'));
+    const fD=head.findIndex(c=>c.includes('dist')||c.includes('dest')||c.includes('tujuan')||c.includes('delivery'));
+    const fTotal=head.findIndex(c=>c.includes('total')||c.includes('order'));
+    const fKub=head.findIndex(c=>c.includes('m3')||c.includes('kubik')||c.includes('cbm')||c.includes('volume'));
     const fK=head.findIndex(c=>c.includes('truck')||c.includes('type')||c.includes('kendaraan')||c.includes('tipe'));
-    if(fNo>=0)iNo=fNo; if(fT>=0)iTgl=fT; if(fD>=0)iDest=fD; if(fKub>=0)iKubik=fKub; if(fK>=0)iTipe=fK;
+    if(fT>=0)iTgl=fT; if(fSales>=0)iSales=fSales; if(fD>=0)iDest=fD;
+    if(fTotal>=0)iTotal=fTotal; if(fKub>=0)iKubik=fKub; if(fK>=0)iTipe=fK;
     start=1;
   }
   const out=[];
   for(let i=start;i<matrix.length;i++){
     const row=matrix[i]; if(!row||!row.length) continue;
     const dest=row[iDest], tgl=row[iTgl];
-    if(dest==null && tgl==null) continue;
-    out.push({ no:row[iNo], tgl:tgl, dest:dest, kubik:row[iKubik], tipe:row[iTipe] });
+    if((dest==null||String(dest).trim()==='') && (tgl==null||String(tgl).trim()==='')) continue;
+    out.push({
+      tgl:tgl, sales:row[iSales], dest:dest,
+      total:row[iTotal], kubik:row[iKubik], tipe:row[iTipe]
+    });
   }
   return out;
 }
@@ -713,7 +722,8 @@ function buildPesan(eksp){
   // siapkan data simpan (orderRows untuk GSheet)
   const orderRows=items.map(r=>({
     tgl: fmtTgl(r.tgl), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
-    kubik: r.kubik||'', harga: r.pilihHarga||0
+    kubik: r.kubik||'', harga: r.pilihHarga||0,
+    sales: r.sales||'', total: r.total||''
   }));
   currentBatch={ noOrd, eksp, msg, orderRows };
 }
@@ -754,34 +764,48 @@ function waNomorEksp(eksp){
 }
 
 // ============ LOAD ORDER BELUM SELESAI DARI SHEET ============
-function loadFromSheet(){
+function loadFromSheet(silent){
   const cb='cbPlan'+Date.now();
   window[cb]=function(resp){
     delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
     if(!resp || !resp.items){ return; }
-    const fromSheet = resp.items.map(it=>({
-      id: ++rowSeq,
-      tuj: it.tuj||'',
-      tgl: '', // tgl di sheet sudah teks; biarkan kosong utk date input, tampilkan apa adanya
-      tglText: it.tgl||'',
-      jam: it.jam||'',
-      kubik: it.kubik||'',
-      tipe: normalizeTipe(it.tipe||''),
-      status: (String(it.status||'').toLowerCase().indexOf('tidak')>=0)?'Tidak':'Belum',
-      pilihEksp: it.kode_eksp||it.ekspedisi||'',
-      pilihHarga: Number(it.harga)||0,
-      noOrder: it.no_order||'',
-      fromSheet:true
-    }));
-    // taruh order Sheet di ATAS daftar
+    // simpan pilihan user pada order Sheet lama (truck/jam/ekspedisi) by key
+    const prev={};
+    rows.filter(r=>r.fromSheet).forEach(r=>{
+      prev[(r.noOrder||'')+'|'+norm(r.tuj)] = {tipe:r.tipe, jam:r.jam, pilihEksp:r.pilihEksp, pilihHarga:r.pilihHarga};
+    });
+    const fromSheet = resp.items.map(it=>{
+      const key=(it.no_order||'')+'|'+norm(it.tuj||'');
+      const p=prev[key]||{};
+      return {
+        id: ++rowSeq,
+        tuj: it.tuj||'',
+        tgl: '',
+        tglText: it.tgl||'',
+        jam: p.jam || it.jam || '',
+        kubik: it.kubik||'',
+        tipe: p.tipe || normalizeTipe(it.tipe||''),
+        status: (String(it.status||'').toLowerCase().indexOf('tidak')>=0)?'Tidak':'Belum',
+        pilihEksp: p.pilihEksp || it.kode_eksp || it.ekspedisi || '',
+        pilihHarga: p.pilihHarga || Number(it.harga)||0,
+        noOrder: it.no_order||'',
+        fromSheet:true
+      };
+    });
     rows = fromSheet.concat(rows.filter(r=>!r.fromSheet));
     renderRows();
-    if(fromSheet.length) toast(fromSheet.length+' order belum selesai dimuat','ok');
+    if(!silent && fromSheet.length) toast(fromSheet.length+' order dari Sheet','ok');
+    setLastSync();
   };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?action=getplanning&callback='+cb;
   sc.onerror=function(){ delete window[cb]; };
   document.body.appendChild(sc);
+}
+
+function setLastSync(){
+  const el=document.getElementById('last-sync');
+  if(el){ const d=new Date(); el.textContent='↻ '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); }
 }
 
 // ============ INIT ============
@@ -792,7 +816,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadHarga();
   loadDist();
   renderRows();
-  setTimeout(loadFromSheet, 2000); // tunda agar tidak bentrok dgn fetch harga
+  setTimeout(loadFromSheet, 2000); // muat awal
+  // auto-refresh tiap 30 detik (silent, jaga draft & pilihan)
+  setInterval(()=>loadFromSheet(true), 30000);
 });
 </script>
 </body>
