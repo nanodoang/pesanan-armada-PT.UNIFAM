@@ -131,6 +131,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .row-tidak{background:#FEF2F2 !important;opacity:.7}
 .jam-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}
 .truck-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;font-weight:600}
+.btn-hapus{width:30px;height:30px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;padding:0}
+.btn-hapus:active{background:#FCA5A5}
 </style>
 </head>
 <body>
@@ -139,7 +141,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v14</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v15</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -544,7 +546,7 @@ function renderTable(){
   if(!tbl) return;
   // Header
   let head='<thead><tr>'+
-    '<th>No</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
+    '<th>No</th><th>Hapus</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
     '<th class="grp1">EXP</th><th class="grp1">Rate</th><th>Rank</th>';
   for(let k=1;k<=4;k++){
     head+=`<th class="grp2">Rank ${k}</th><th class="grp2">Rate</th><th class="grp2"></th>`;
@@ -579,6 +581,7 @@ function renderTable(){
     else { badge='<span class="st-badge st-baru">🆕 Baru</span>'; rowClass=''; }
     body+=`<tr class="${rowClass}">
       <td class="tbl-rownum">${i+1}</td>
+      <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
       <td>${badge}</td>
       <td>${r.tgl?fmtTgl(r.tgl):(r.tglText||'<span class="tbl-na">-</span>')}</td>
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
