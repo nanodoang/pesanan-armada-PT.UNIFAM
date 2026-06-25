@@ -131,7 +131,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v2</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v3</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -158,7 +158,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <textarea id="paste-area" placeholder="Tempel dari Excel (kolom No, Tanggal, Destination dipisah tab/koma). Contoh:&#10;1&#9;02-Jan-26&#9;PT. Borwita Citra Prima - MANADO&#10;2&#9;02-Jan-26&#9;CV. Mitra - TORAJA"></textarea>
         <button class="btn-parse" onclick="parsePaste()">Proses Teks</button>
       </div>
-      <p class="import-hint">Sudah ada data? Tambahan upload akan <b>mengganti</b> daftar di bawah.</p>
+      <p class="import-hint">Data tujuan dimuat otomatis dari Sheet. <a href="#" onclick="refreshPlanning();return false;" style="color:var(--teal);font-weight:700">↻ Muat ulang dari Sheet</a></p>
     </div>
 
     <div class="sec-lbl">Daftar Rencana Order</div>
@@ -199,8 +199,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 // ============ KONFIG ============
 const GAS_URL     = 'https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
 const KONFIRM_URL = 'https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/konfirmasi.html';
-const HARGA_CSV   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=591450213&single=true&output=csv';
-// GANTI dengan link CSV Master Distributor
+let HARGA_CSV     = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=591450213&single=true&output=csv';
+// Data planning (No, Tanggal, Destination) — auto-load dari sheet
+let PLANNING_CSV  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=0&single=true&output=csv';
+// GANTI dengan link CSV Master Distributor (opsional, utk autocomplete manual)
 const MASTER_DIST_CSV = 'PASTE_LINK_CSV_MASTER_DISTRIBUTOR_DISINI';
 const ADMINS = '6285885549707';
 
@@ -284,6 +286,31 @@ function loadDist(){
     distData=rws.slice(1).filter(r=>r.length>1).map(r=>({kota:cleanTxt(r[iK]),dist:cleanTxt(r[iN])}))
       .filter(r=>{ if(!r.kota||!r.dist)return false; const k=norm(r.dist); if(seen[k])return false; seen[k]=1; return true; });
   }).catch(e=>console.warn('dist',e));
+}
+
+// Auto-load data planning (No, Tanggal, Destination) dari sheet
+function loadPlanning(){
+  if(!PLANNING_CSV){ addRow(); return; }
+  setHargaStatus('Memuat data planning…');
+  fetch(PLANNING_CSV).then(r=>r.text()).then(txt=>{
+    const matrix=parseCSV(txt);
+    const recs=recordsFromMatrix(matrix);
+    if(recs.length){
+      buildRowsFrom(recs);
+    }else{
+      addRow();
+      toast('Data planning kosong — isi manual','err');
+    }
+  }).catch(e=>{
+    console.warn('planning',e);
+    addRow();
+    toast('Gagal muat planning — isi manual','err');
+  });
+}
+
+// Muat ulang data planning dari sheet (tombol Refresh)
+function refreshPlanning(){
+  loadPlanning();
 }
 
 // ============ RANKING ============
@@ -665,16 +692,14 @@ function waNomorEksp(eksp){
 
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded',()=>{
-  // Cek parameter &csv=
   const url = new URL(window.location.href);
   const csvOverride = url.searchParams.get('csv');
-  if(csvOverride){
-    console.log('Override HARGA_CSV:', csvOverride);
-    window.HARGA_CSV = csvOverride;
-  }
+  if(csvOverride){ HARGA_CSV = csvOverride; }
+  const planOverride = url.searchParams.get('plan');
+  if(planOverride){ PLANNING_CSV = planOverride; }
   loadHarga();
   loadDist();
-  addRow();
+  loadPlanning();   // auto isi daftar order dari sheet
 });
 </script>
 </body>
