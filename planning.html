@@ -139,7 +139,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v10</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v12</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -167,6 +167,11 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <button class="btn-parse" onclick="parsePaste()">Proses Teks</button>
       </div>
       <p class="import-hint">Upload Excel/CSV atau paste dari Excel. Kolom: <b>No, Tanggal, Destination, Kubikasi</b> (truck pilih manual di tabel).</p>
+      <div id="rate-fallback" style="display:none;margin-top:8px;padding:8px;background:#FEF3C7;border-radius:8px">
+        <p style="font-size:11px;color:#92400E;margin:0 0 6px">Rate gagal dimuat otomatis. Tempel link CSV rate, lalu ketuk Muat:</p>
+        <input type="text" id="rate-link" placeholder="https://docs.google.com/.../output=csv" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:6px">
+        <button class="btn-parse" onclick="muatRateManual()" style="margin:0">Muat Rate</button>
+      </div>
     </div>
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
@@ -255,9 +260,13 @@ function toast(msg,type){
 }
 
 // ============ LOAD DATA ============
-function loadHarga(){
-  setHargaStatus('Memuat data rate…');
-  fetch(HARGA_CSV).then(r=>r.text()).then(txt=>{
+function loadHarga(tries){
+  tries = tries||0;
+  setHargaStatus('Memuat data rate…'+(tries?(' (percobaan '+(tries+1)+')'):''));
+  fetch(HARGA_CSV).then(r=>{
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(txt=>{
     const rws=parseCSV(txt);
     if(!rws.length){ setHargaStatus('⚠️ Data rate kosong'); return; }
     const head=rws[0].map(h=>norm(h));
@@ -271,11 +280,29 @@ function loadHarga(){
     })).filter(r=>r.dest && r.price>0);
     setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat') : '⚠️ Tidak ada rate valid');
     renderRanks();
-  }).catch(e=>{ console.warn('harga',e); setHargaStatus('⚠️ Gagal memuat rate (cek koneksi/URL)'); });
+  }).catch(e=>{
+    console.warn('harga',e);
+    if(tries < 3){
+      setTimeout(()=>loadHarga(tries+1), 1200); // coba ulang
+    }else{
+      setHargaStatus('⚠️ Gagal: '+(e.message||'fetch')+' — ketuk coba lagi');
+      const el=document.getElementById('harga-status');
+      if(el){ el.style.cursor='pointer'; el.onclick=()=>loadHarga(0); }
+      const fb=document.getElementById('rate-fallback'); if(fb) fb.style.display='block';
+    }
+  });
 }
 function setHargaStatus(msg){
   const el=document.getElementById('harga-status');
   if(el) el.textContent=msg;
+}
+// Muat rate dari link yang ditempel manual
+function muatRateManual(){
+  const v=(document.getElementById('rate-link').value||'').trim();
+  if(!v){ toast('Tempel link CSV rate dulu','err'); return; }
+  HARGA_CSV=v;
+  document.getElementById('rate-fallback').style.display='none';
+  loadHarga(0);
 }
 function loadDist(){
   if(!MASTER_DIST_CSV || MASTER_DIST_CSV.indexOf('PASTE_LINK')===0) return;
@@ -761,7 +788,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadHarga();
   loadDist();
   renderRows();
-  loadFromSheet(); // tampilkan order belum selesai dari Sheet
+  setTimeout(loadFromSheet, 2000); // tunda agar tidak bentrok dgn fetch harga
 });
 </script>
 </body>
