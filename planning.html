@@ -131,7 +131,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico">🚚</div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v3</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v4</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
   </div>
 </div>
@@ -161,12 +161,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <p class="import-hint">Data tujuan dimuat otomatis dari Sheet. <a href="#" onclick="refreshPlanning();return false;" style="color:var(--teal);font-weight:700">↻ Muat ulang dari Sheet</a></p>
     </div>
 
-    <div class="sec-lbl">Daftar Rencana Order</div>
-    <div id="entry-list"></div>
-    <button class="btn-add" onclick="addRow()">+ Tambah Tujuan</button>
-
-    <div class="sec-lbl" style="margin-top:18px">Tabel Perbandingan Rate</div>
-    <p class="hint" style="text-align:left;margin-bottom:8px">Geser tabel ke samping untuk lihat Rank 1–4. Ketuk <b>klik</b> di sebelah rate untuk memilih ekspedisi.</p>
+    <div class="sec-lbl">Tabel Perbandingan Rate</div>
+    <p class="hint" style="text-align:left;margin-bottom:8px">Data dimuat dari Sheet. Geser tabel ke samping untuk Rank 1–4. Ketuk <b>klik</b> di sebelah rate untuk memilih ekspedisi.</p>
     <div class="table-scroll">
       <table class="rate-tbl" id="rate-tbl"></table>
     </div>
@@ -288,9 +284,9 @@ function loadDist(){
   }).catch(e=>console.warn('dist',e));
 }
 
-// Auto-load data planning (No, Tanggal, Destination) dari sheet
+// Auto-load data planning (No, Tanggal, Destination, Truck) dari sheet
 function loadPlanning(){
-  if(!PLANNING_CSV){ addRow(); return; }
+  if(!PLANNING_CSV){ return; }
   setHargaStatus('Memuat data planning…');
   fetch(PLANNING_CSV).then(r=>r.text()).then(txt=>{
     const matrix=parseCSV(txt);
@@ -298,13 +294,13 @@ function loadPlanning(){
     if(recs.length){
       buildRowsFrom(recs);
     }else{
-      addRow();
-      toast('Data planning kosong — isi manual','err');
+      rows=[]; renderRows();
+      toast('Data planning kosong di Sheet','err');
     }
   }).catch(e=>{
     console.warn('planning',e);
-    addRow();
-    toast('Gagal muat planning — isi manual','err');
+    rows=[]; renderRows();
+    toast('Gagal muat planning — cek koneksi/publish','err');
   });
 }
 
@@ -393,26 +389,42 @@ function buildRowsFrom(records){
     id: ++rowSeq,
     tuj: cleanTxt(rec.dest||''),
     tgl: parseTanggal(rec.tgl),
-    tipe: '',
+    tipe: normalizeTipe(cleanTxt(rec.tipe||'')),
     pilihEksp: '', pilihHarga: 0
   })).filter(r=>r.tuj);
-  if(!rows.length){ toast('Kolom Destination kosong semua','err'); addRow(); return; }
+  if(!rows.length){ toast('Kolom Destination kosong semua','err'); return; }
   renderRows();
-  toast(rows.length+' order dimuat — pilih truck type','ok');
+  toast(rows.length+' order dimuat dari Sheet','ok');
+}
+
+// Samakan label truck dari sheet ke pilihan standar (toleran spasi/kapital)
+function normalizeTipe(t){
+  const n=norm(t);
+  if(!n) return '';
+  const map={
+    '20 ft':'20 FT','20ft':'20 FT','20':'20 FT',
+    '20 ft c':'20 FT C','20ft c':'20 FT C','20 c':'20 FT C','20c':'20 FT C','20 ft combo':'20 FT C',
+    '40 ft':'40 FT','40ft':'40 FT','40':'40 FT','40 hq':'40 FT','40 ft hq':'40 FT',
+    'fuso 48':'FUSO 48','fuso48':'FUSO 48',
+    'wingbox':'WINGBOX','wing box':'WINGBOX',
+    'cd 17':'CD 17','cd17':'CD 17',
+    'fuso 27':'FUSO 27','fuso27':'FUSO 27'
+  };
+  return map[n] || t; // kalau tak dikenali, pakai apa adanya
 }
 
 // Deteksi kolom dari header / posisi
 function recordsFromMatrix(matrix){
   if(!matrix.length) return [];
-  // cek header
-  let start=0, iNo=0, iTgl=1, iDest=2;
+  let start=0, iNo=0, iTgl=1, iDest=2, iTipe=3;
   const head=matrix[0].map(c=>norm(c));
-  const hasHeader = head.some(c=>c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('no'));
+  const hasHeader = head.some(c=>c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('type'));
   if(hasHeader){
     const fNo=head.findIndex(c=>c==='no'||c.includes('no.'));
     const fT=head.findIndex(c=>c.includes('tanggal')||c.includes('tgl')||c.includes('date'));
     const fD=head.findIndex(c=>c.includes('dest')||c.includes('tujuan')||c.includes('delivery'));
-    if(fNo>=0)iNo=fNo; if(fT>=0)iTgl=fT; if(fD>=0)iDest=fD;
+    const fK=head.findIndex(c=>c.includes('truck')||c.includes('type')||c.includes('kendaraan')||c.includes('tipe'));
+    if(fNo>=0)iNo=fNo; if(fT>=0)iTgl=fT; if(fD>=0)iDest=fD; if(fK>=0)iTipe=fK;
     start=1;
   }
   const out=[];
@@ -420,7 +432,7 @@ function recordsFromMatrix(matrix){
     const row=matrix[i]; if(!row||!row.length) continue;
     const dest=row[iDest], tgl=row[iTgl];
     if(dest==null && tgl==null) continue;
-    out.push({ no:row[iNo], tgl:tgl, dest:dest });
+    out.push({ no:row[iNo], tgl:tgl, dest:dest, tipe:row[iTipe] });
   }
   return out;
 }
@@ -462,46 +474,7 @@ function delRow(id){
   renderRows();
 }
 function renderRows(){
-  renderEntries();
   renderTable();
-}
-
-// Bagian input: tujuan + tanggal + tipe (kartu ringkas)
-function renderEntries(){
-  const box=document.getElementById('entry-list');
-  box.innerHTML = rows.map((r,i)=>`
-    <div class="orow">
-      <div class="orow-hd">
-        <span>Tujuan #${i+1}</span>
-        <button class="btn-del" onclick="delRow(${r.id})">✕</button>
-      </div>
-      <div class="fld">
-        <label>Tujuan / Kota <span class="req">*</span></label>
-        <input type="text" id="tuj-${r.id}" autocomplete="off" value="${(r.tuj||'').replace(/"/g,'&quot;')}"
-          placeholder="Ketik kota (mis. Manado)" oninput="onTuj(${r.id})" onblur="closeSugg(${r.id})">
-        <div id="sugg-${r.id}"></div>
-      </div>
-      <div class="grid2">
-        <div class="fld">
-          <label>Tanggal <span class="req">*</span></label>
-          <input type="date" id="tgl-${r.id}" value="${r.tgl||''}" onchange="setField(${r.id},'tgl',this.value)">
-        </div>
-        <div class="fld">
-          <label>Jenis Kendaraan <span class="req">*</span></label>
-          <select id="tipe-${r.id}" onchange="setTipe(${r.id},this.value)">
-            <option value="">-- Pilih --</option>
-            <option ${r.tipe==='20 FT'?'selected':''}>20 FT</option>
-            <option ${r.tipe==='20 FT C'?'selected':''}>20 FT C</option>
-            <option ${r.tipe==='40 FT'?'selected':''}>40 FT</option>
-            <option ${r.tipe==='FUSO 48'?'selected':''}>FUSO 48</option>
-            <option ${r.tipe==='WINGBOX'?'selected':''}>WINGBOX</option>
-            <option ${r.tipe==='CD 17'?'selected':''}>CD 17</option>
-            <option ${r.tipe==='FUSO 27'?'selected':''}>FUSO 27</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  `).join('');
 }
 
 // Tabel perbandingan rate dengan Rank 1-4 + tombol klik
