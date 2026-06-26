@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v21</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v24</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -203,6 +203,16 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <button class="btn-copy" onclick="copyPesan()">Salin</button>
       </div>
     </div>
+
+    <div class="wa-card" id="approve-box" style="display:none;background:#FEF6E7;border-color:#F4D58A">
+      <h3 style="color:#92400E">🙏 Pesan Approval — Management</h3>
+      <p style="font-size:11px;color:#92400E;margin-bottom:8px">Order ini memakai bukan rate termurah. Kirim ke grup approval (pilih kontak/grup saat WA terbuka).</p>
+      <div class="wa-bubble" id="approve-bubble"></div>
+      <div class="wa-actions">
+        <button class="btn-wa" style="background:#B45309" onclick="kirimApprove()">Kirim WA Approve</button>
+        <button class="btn-copy" onclick="copyApprove()">Salin</button>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -252,6 +262,34 @@ function toNumber(str){
 }
 function rupiah(n){ return 'Rp ' + (n||0).toLocaleString('id-ID'); }
 function fmtTgl(s){ if(!s) return '___'; return new Date(s+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
+// Rapikan tanggal apa pun (ISO penuh, dd-MMM-yy, dll) → "26 Jun 2026"
+// Rapikan jam (ISO penuh dari Sheets, atau "HH:MM") → "HH:MM"
+function tampilJam(raw){
+  if(raw==null || raw==='') return '';
+  let s=String(raw).trim();
+  // sudah HH:MM
+  let m=s.match(/^(\d{1,2}):(\d{2})/);
+  if(m) return String(m[1]).padStart(2,'0')+':'+m[2];
+  // ISO penuh (1899-12-30T01:52:48.000Z) → ambil jam:menit UTC
+  const d=new Date(s);
+  if(!isNaN(d.getTime()) && /T\d{2}:\d{2}/.test(s)){
+    return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
+  }
+  return s;
+}
+function tampilTgl(raw){
+  if(raw==null || raw==='') return '-';
+  let s=String(raw).trim();
+  // ISO penuh dengan T (2026-06-26T17:00:00.000Z) atau tanggal biasa
+  const d=new Date(s);
+  if(!isNaN(d.getTime()) && /\d{4}-\d{2}-\d{2}/.test(s)){
+    return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  // coba parse format lain → ISO → format
+  const iso=parseTanggal(s);
+  if(iso) return fmtTgl(iso);
+  return s; // biarkan apa adanya kalau tak dikenali
+}
 
 function parseCSV(text){
   let r=[],cur=[],val='',q=false;
@@ -588,15 +626,16 @@ function gabungMultidrop(){
     toast('Truck harus sama & terisi semua','err'); return;
   }
   const gid = ++dropSeq;
-  grp.forEach(r=>{ r.dropGroup=gid; });
+  grp.forEach(r=>{ r.dropGroup=gid; r.biayaDrop=0; });
   checkedIds.clear();
   updateDropBar();
   renderRows();
-  // minta biaya drop tambahan
-  const biaya = prompt('Biaya drop tambahan (Rp) untuk gabungan '+grp.length+' tujuan?\nContoh: 500000', '0');
-  const b = toNumber(biaya);
-  grp.forEach(r=>{ r.biayaDrop = b||0; });
-  toast('Multi-drop dibuat ('+grp.length+' tujuan)','ok');
+  toast('Multi-drop dibuat. Isi biaya tambahan di baris drop.','ok');
+}
+// set biaya tambahan multi-drop (input inline)
+function setBiayaDrop(gid, val){
+  const b=toNumber(val)||0;
+  rows.forEach(r=>{ if(r.dropGroup===gid) r.biayaDrop=b; });
   renderRows();
 }
 // batalkan grup multi-drop dari 1 baris
@@ -671,14 +710,31 @@ function renderTable(){
     else { badge='<span class="st-badge st-baru">🆕 Baru</span>'; rowClass=''; }
     // badge multi-drop
     let dropBadge='';
-    if(r.dropGroup){ dropBadge=' <span class="st-badge st-drop">🚚 Multidrop '+r.dropGroup+'</span>'; rowClass='row-drop'; }
+    if(r.dropGroup){
+      rowClass='row-drop';
+      // cek apakah baris pertama dari grup ini
+      const grpRows=rows.filter(x=>x.dropGroup===r.dropGroup);
+      const isFirst = grpRows[0].id===r.id;
+      const rateTertinggi = Math.max(...grpRows.map(x=>x.pilihHarga||0));
+      const total = rateTertinggi + (r.biayaDrop||0);
+      dropBadge=' <span class="st-badge st-drop">🚚 Multidrop '+r.dropGroup+'</span>';
+      if(isFirst){
+        dropBadge += `<div style="margin-top:6px;font-size:11px;line-height:1.5">
+          <button onclick="pisahMultidrop(${r.dropGroup})" style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:5px;font-size:10px;padding:2px 6px;cursor:pointer;margin-bottom:4px">✕ Pisah</button><br>
+          Biaya tambahan:<br>
+          <input type="number" value="${r.biayaDrop||0}" onchange="setBiayaDrop(${r.dropGroup},this.value)" style="width:110px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px" placeholder="Rp">
+          <br><b style="color:#0C447C">Total: ${rupiah(total)}</b>
+          <span style="color:var(--text3)">(terjauh ${rupiah(rateTertinggi)} + drop)</span>
+        </div>`;
+      }
+    }
     const checked = checkedIds.has(r.id) ? 'checked' : '';
     body+=`<tr class="${rowClass}">
       <td><input type="checkbox" class="row-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)"></td>
       <td class="tbl-rownum">${i+1}</td>
       <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
       <td>${badge}${dropBadge}</td>
-      <td>${r.tgl?fmtTgl(r.tgl):(r.tglText||'<span class="tbl-na">-</span>')}</td>
+      <td>${r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText)}</td>
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
       <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
@@ -793,7 +849,7 @@ let currentBatch=null;
 function buildPesan(eksp){
   const items=rows.filter(r=>r.pilihEksp===eksp);
   const noOrd=buatNoOrder();
-  const tglShow=r=> r.tgl?fmtTgl(r.tgl):(r.tglText||'-');
+  const tglShow=r=> r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText);
   let lines='';
   let adaNonRank1=false;
   let catatanApprove='';
@@ -809,7 +865,7 @@ function buildPesan(eksp){
   // item tunggal
   single.forEach(r=>{
     no++;
-    lines += no+'. '+tglShow(r)+' '+(r.jam||'')+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+    lines += no+'. '+tglShow(r)+' '+tampilJam(r.jam)+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
       const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
@@ -845,21 +901,42 @@ function buildPesan(eksp){
     '&eksp='+encodeURIComponent(eksp)+
     '&admins='+encodeURIComponent(ADMINS);
 
+  // PESAN 1: ke ekspedisi (tanpa approve)
   let msg='*ORDER ARMADA - PT. UNIFAM*\nNo: *'+noOrd+'* | Eksp: *'+eksp+'*\n\n'+lines;
-
-  if(adaNonRank1){
-    msg += '\n──────────────\n'+
-      '🙏 *Mohon Persetujuan*\n'+
-      'Untuk pesanan berikut, kami menggunakan ekspedisi *selain rate termurah* karena armada termurah sedang tidak tersedia. Mohon kesediaannya untuk approve:\n\n'+
-      catatanApprove+
-      '\nTerima kasih atas pengertiannya. 🙏\n';
-  }
-
   msg += '\nKonfirmasi: '+link;
+
+  // PESAN 2: approve ke management (hanya jika ada non-rank1)
+  let msgApprove='';
+  if(adaNonRank1){
+    // hitung total biaya order ini
+    let totalBiaya=0;
+    items.forEach(r=>{ totalBiaya += (r.pilihHarga||0); });
+    // tambah biaya drop multi-drop (sekali per grup)
+    const grupSeen={};
+    items.forEach(r=>{ if(r.dropGroup && !grupSeen[r.dropGroup]){ grupSeen[r.dropGroup]=1; totalBiaya += (r.biayaDrop||0); } });
+
+    msgApprove='*PERMINTAAN APPROVAL - PT. UNIFAM*\nNo Order: *'+noOrd+'*\nEkspedisi: *'+eksp+'*\n\n'+
+      'Mohon persetujuan. Order berikut menggunakan ekspedisi *selain rate termurah* karena armada termurah sedang tidak tersedia:\n\n'+
+      catatanApprove+
+      '\n──────────────\n'+
+      '*Total Biaya Order: '+rupiah(totalBiaya)+'*\n\n'+
+      'Mohon arahan untuk approve. Terima kasih. 🙏';
+  }
 
   document.getElementById('wa-eksp').textContent=eksp;
   document.getElementById('wa-bubble').textContent=msg;
   document.getElementById('wa-card').style.display='block';
+
+  // tombol approve terpisah (muncul hanya jika ada non-rank1)
+  const apvBox=document.getElementById('approve-box');
+  if(apvBox){
+    if(msgApprove){
+      apvBox.style.display='block';
+      document.getElementById('approve-bubble').textContent=msgApprove;
+    }else{
+      apvBox.style.display='none';
+    }
+  }
 
   // siapkan data simpan (orderRows untuk GSheet)
   const orderRows=items.map(r=>({
@@ -867,7 +944,18 @@ function buildPesan(eksp){
     kubik: r.kubik||'', harga: r.pilihHarga||0,
     sales: r.sales||'', total: r.total||''
   }));
-  currentBatch={ noOrd, eksp, msg, orderRows, items };
+  currentBatch={ noOrd, eksp, msg, msgApprove, orderRows, items };
+}
+
+// kirim WA approve ke grup management (kontak dipilih manual)
+function kirimApprove(){
+  if(!currentBatch || !currentBatch.msgApprove){ toast('Tidak ada yang perlu di-approve','err'); return; }
+  const waUrl = 'https://wa.me/?text='+encodeURIComponent(currentBatch.msgApprove);
+  window.open(waUrl,'_blank');
+}
+function copyApprove(){
+  if(!currentBatch || !currentBatch.msgApprove) return;
+  navigator.clipboard.writeText(currentBatch.msgApprove).then(()=>toast('Pesan approve disalin','ok')).catch(()=>toast('Gagal menyalin','err'));
 }
 
 function copyPesan(){
