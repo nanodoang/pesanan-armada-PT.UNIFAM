@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v25</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v26</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1047,21 +1047,34 @@ function loadFromSheet(silent){
 function loadDraft(silent){
   gasJSONP('action=getdraft', function(resp){
     if(!resp || !resp.items){ if(!silent) loadFromSheet(true); return; }
-    const draftRows = resp.items.map(it=>({
-      id: ++rowSeq,
-      draft_id: it.draft_id,
-      tuj: it.tuj||'',
-      tgl: '', tglText: it.tgl||'',
-      jam: it.jam||'',
-      sales: it.sales||'',
-      total: it.total||'',
-      kubik: it.kubik||'',
-      tipe: normalizeTipe(it.tipe||''),
-      status: 'Baru',
-      pilihEksp: it.pilihEksp||'',
-      pilihHarga: Number(it.pilihHarga)||0,
-      isDraft:true
-    }));
+    // simpan info multidrop & pilihan lokal (by draft_id) sebelum reload
+    const prev={};
+    rows.filter(r=>r.isDraft && r.draft_id).forEach(r=>{
+      prev[r.draft_id]={ dropGroup:r.dropGroup, biayaDrop:r.biayaDrop, jam:r.jam, tipe:r.tipe, pilihEksp:r.pilihEksp, pilihHarga:r.pilihHarga };
+    });
+    let maxDrop=0;
+    const draftRows = resp.items.map(it=>{
+      const p=prev[it.draft_id]||{};
+      if(p.dropGroup) maxDrop=Math.max(maxDrop, p.dropGroup);
+      return {
+        id: ++rowSeq,
+        draft_id: it.draft_id,
+        tuj: it.tuj||'',
+        tgl: '', tglText: it.tgl||'',
+        jam: p.jam || it.jam || '',
+        sales: it.sales||'',
+        total: it.total||'',
+        kubik: it.kubik||'',
+        tipe: p.tipe || normalizeTipe(it.tipe||''),
+        status: 'Baru',
+        pilihEksp: p.pilihEksp || it.pilihEksp || '',
+        pilihHarga: p.pilihHarga || Number(it.pilihHarga)||0,
+        dropGroup: p.dropGroup || null,
+        biayaDrop: p.biayaDrop || 0,
+        isDraft:true
+      };
+    });
+    if(maxDrop>dropSeq) dropSeq=maxDrop; // jaga nomor grup tidak bentrok
     rows = draftRows.concat(rows.filter(r=>!r.isDraft));
     renderRows();
     setLastSync();
