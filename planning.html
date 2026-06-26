@@ -127,6 +127,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .st-belum{background:#FEF3C7;color:#B45309}
 .st-tidak{background:#FEE2E2;color:#B91C1C}
 .st-baru{background:#E0F2FE;color:#0369A1}
+.st-drop{background:#0C447C;color:#fff}
+.row-drop{background:#F0F7FF !important}
 .row-belum{background:#FFFBEB !important}
 .row-tidak{background:#FEF2F2 !important;opacity:.7}
 .jam-sel{padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}
@@ -138,10 +140,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 <body>
 
 <div class="hdr">
-  <div class="ico">🚚</div>
+  <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v19</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v21</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -178,7 +180,11 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
     </div>
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
-    <p class="hint" style="text-align:left;margin-bottom:8px">Data dimuat dari Sheet. Geser tabel ke samping untuk Rank 1–4. Ketuk <b>klik</b> di sebelah rate untuk memilih ekspedisi.</p>
+    <p class="hint" style="text-align:left;margin-bottom:8px">Centang tujuan lalu <b>Gabung Multi-drop</b> untuk 1 mobil banyak tujuan. Ketuk <b>klik</b> di rate untuk pilih ekspedisi.</p>
+    <div id="drop-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:#EEF6FF;border:1px solid #BBD8F5;border-radius:8px;margin-bottom:8px">
+      <span style="font-size:13px;color:#0C447C"><b id="drop-count">0</b> tujuan tercentang</span>
+      <button onclick="gabungMultidrop()" style="background:#0C447C;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🚚 Gabung Multi-drop</button>
+    </div>
     <div class="table-scroll">
       <table class="rate-tbl" id="rate-tbl"></table>
     </div>
@@ -230,6 +236,8 @@ let hargaData = [];   // [{expedition, dest, vtype, price, hp}]
 let distData  = [];   // [{kota, dist}]
 let rows      = [];   // [{id, tuj, tgl, tipe, kode, pilihEksp, pilihHarga}]
 let rowSeq    = 0;
+let checkedIds = new Set(); // baris tercentang utk multi-drop
+let dropSeq   = 0;          // nomor grup multi-drop
 let groupSel  = null; // ekspedisi terpilih di tahap 2
 
 // ============ UTIL ============
@@ -552,6 +560,48 @@ function delRow(id){
     gasJSONP('action=deldraft&draft_id='+encodeURIComponent(r.draft_id));
   }
   rows=rows.filter(r=>r.id!==id);
+  checkedIds.delete(id);
+  renderRows();
+}
+
+// ===== MULTI-DROP =====
+function toggleCheck(id, on){
+  if(on) checkedIds.add(id); else checkedIds.delete(id);
+  updateDropBar();
+}
+function updateDropBar(){
+  const bar=document.getElementById('drop-bar');
+  if(!bar) return;
+  const n=checkedIds.size;
+  bar.style.display = n>=2 ? 'flex' : 'none';
+  const lbl=document.getElementById('drop-count');
+  if(lbl) lbl.textContent=n;
+}
+// gabungkan baris tercentang jadi 1 multi-drop
+function gabungMultidrop(){
+  const ids=[...checkedIds];
+  if(ids.length<2){ toast('Centang minimal 2 tujuan','err'); return; }
+  const grp=rows.filter(r=>ids.includes(r.id));
+  // semua truck harus sama (1 mobil)
+  const tipe0=grp[0].tipe;
+  if(grp.some(r=>!r.tipe || r.tipe!==tipe0)){
+    toast('Truck harus sama & terisi semua','err'); return;
+  }
+  const gid = ++dropSeq;
+  grp.forEach(r=>{ r.dropGroup=gid; });
+  checkedIds.clear();
+  updateDropBar();
+  renderRows();
+  // minta biaya drop tambahan
+  const biaya = prompt('Biaya drop tambahan (Rp) untuk gabungan '+grp.length+' tujuan?\nContoh: 500000', '0');
+  const b = toNumber(biaya);
+  grp.forEach(r=>{ r.biayaDrop = b||0; });
+  toast('Multi-drop dibuat ('+grp.length+' tujuan)','ok');
+  renderRows();
+}
+// batalkan grup multi-drop dari 1 baris
+function pisahMultidrop(gid){
+  rows.forEach(r=>{ if(r.dropGroup===gid){ r.dropGroup=null; r.biayaDrop=0; } });
   renderRows();
 }
 
@@ -586,7 +636,7 @@ function renderTable(){
   if(!tbl) return;
   // Header
   let head='<thead><tr>'+
-    '<th>No</th><th>Hapus</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
+    '<th>✓</th><th>No</th><th>Hapus</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
     '<th class="grp1">EXP</th><th class="grp1">Rate</th><th>Rank</th>';
   for(let k=1;k<=4;k++){
     head+=`<th class="grp2">Rank ${k}</th><th class="grp2">Rate</th><th class="grp2"></th>`;
@@ -619,10 +669,15 @@ function renderTable(){
     if(st==='Belum'){ badge='<span class="st-badge st-belum">⏳ Belum</span>'; rowClass='row-belum'; }
     else if(st==='Tidak'){ badge='<span class="st-badge st-tidak">❌ Tidak</span>'; rowClass='row-tidak'; }
     else { badge='<span class="st-badge st-baru">🆕 Baru</span>'; rowClass=''; }
+    // badge multi-drop
+    let dropBadge='';
+    if(r.dropGroup){ dropBadge=' <span class="st-badge st-drop">🚚 Multidrop '+r.dropGroup+'</span>'; rowClass='row-drop'; }
+    const checked = checkedIds.has(r.id) ? 'checked' : '';
     body+=`<tr class="${rowClass}">
+      <td><input type="checkbox" class="row-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)"></td>
       <td class="tbl-rownum">${i+1}</td>
       <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
-      <td>${badge}</td>
+      <td>${badge}${dropBadge}</td>
       <td>${r.tgl?fmtTgl(r.tgl):(r.tglText||'<span class="tbl-na">-</span>')}</td>
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
@@ -740,13 +795,67 @@ function buildPesan(eksp){
   const noOrd=buatNoOrder();
   const tglShow=r=> r.tgl?fmtTgl(r.tgl):(r.tglText||'-');
   let lines='';
-  items.forEach((r,i)=>{
-    lines += (i+1)+'. '+tglShow(r)+' '+(r.jam||'')+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+  let adaNonRank1=false;
+  let catatanApprove='';
+
+  // pisahkan: multi-drop grup vs item tunggal
+  const grupMap={}; const single=[];
+  items.forEach(r=>{
+    if(r.dropGroup){ (grupMap[r.dropGroup]=grupMap[r.dropGroup]||[]).push(r); }
+    else single.push(r);
   });
+
+  let no=0;
+  // item tunggal
+  single.forEach(r=>{
+    no++;
+    lines += no+'. '+tglShow(r)+' '+(r.jam||'')+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+    const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
+    if(rank.length){
+      const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
+      if(posisi>0){
+        adaNonRank1=true;
+        const r1 = rank[0];
+        const selisih = (r.pilihHarga||0) - (r1.price||0);
+        catatanApprove += '• '+r.tuj+' ('+r.tipe+')\n'+
+          '   Termurah: '+(r1.expedition||'-')+' — '+rupiah(r1.price)+'\n'+
+          '   Dipilih: '+eksp+' — '+rupiah(r.pilihHarga)+
+          (selisih>0?(' (selisih +'+rupiah(selisih)+')'):'')+'\n';
+      }
+    }
+  });
+
+  // grup multi-drop: harga = rate tertinggi + biaya drop
+  Object.keys(grupMap).forEach(gid=>{
+    no++;
+    const g=grupMap[gid];
+    const rateTertinggi = Math.max(...g.map(x=>x.pilihHarga||0));
+    const biayaDrop = g[0].biayaDrop || 0;
+    const totalDrop = rateTertinggi + biayaDrop;
+    const tujList = g.map(x=>x.tuj).join(' → ');
+    lines += no+'. 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
+             '   '+tglShow(g[0])+' '+(g[0].jam||'')+' | '+g[0].tipe+'\n'+
+             '   Rute: '+tujList+'\n'+
+             '   Rate tertinggi: '+rupiah(rateTertinggi)+'\n'+
+             '   Biaya drop: '+rupiah(biayaDrop)+'\n'+
+             '   *Total: '+rupiah(totalDrop)+'*\n';
+  });
+
   const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrd)+
     '&eksp='+encodeURIComponent(eksp)+
     '&admins='+encodeURIComponent(ADMINS);
-  const msg='*ORDER ARMADA - PT. UNIFAM*\nNo: *'+noOrd+'* | Eksp: *'+eksp+'*\n\n'+lines+'\nKonfirmasi: '+link;
+
+  let msg='*ORDER ARMADA - PT. UNIFAM*\nNo: *'+noOrd+'* | Eksp: *'+eksp+'*\n\n'+lines;
+
+  if(adaNonRank1){
+    msg += '\n──────────────\n'+
+      '🙏 *Mohon Persetujuan*\n'+
+      'Untuk pesanan berikut, kami menggunakan ekspedisi *selain rate termurah* karena armada termurah sedang tidak tersedia. Mohon kesediaannya untuk approve:\n\n'+
+      catatanApprove+
+      '\nTerima kasih atas pengertiannya. 🙏\n';
+  }
+
+  msg += '\nKonfirmasi: '+link;
 
   document.getElementById('wa-eksp').textContent=eksp;
   document.getElementById('wa-bubble').textContent=msg;
