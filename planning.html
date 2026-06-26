@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v24</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v25</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -636,7 +636,12 @@ function gabungMultidrop(){
 function setBiayaDrop(gid, val){
   const b=toNumber(val)||0;
   rows.forEach(r=>{ if(r.dropGroup===gid) r.biayaDrop=b; });
-  renderRows();
+  // update total tanpa render ulang (biar input tidak ke-reset)
+  const grpRows=rows.filter(r=>r.dropGroup===gid);
+  const rateTertinggi = Math.max(...grpRows.map(x=>x.pilihHarga||0));
+  const total = rateTertinggi + b;
+  const el=document.getElementById('drop-total-'+gid);
+  if(el) el.textContent='Total: '+rupiah(total);
 }
 // batalkan grup multi-drop dari 1 baris
 function pisahMultidrop(gid){
@@ -722,9 +727,9 @@ function renderTable(){
         dropBadge += `<div style="margin-top:6px;font-size:11px;line-height:1.5">
           <button onclick="pisahMultidrop(${r.dropGroup})" style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:5px;font-size:10px;padding:2px 6px;cursor:pointer;margin-bottom:4px">✕ Pisah</button><br>
           Biaya tambahan:<br>
-          <input type="number" value="${r.biayaDrop||0}" onchange="setBiayaDrop(${r.dropGroup},this.value)" style="width:110px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px" placeholder="Rp">
-          <br><b style="color:#0C447C">Total: ${rupiah(total)}</b>
-          <span style="color:var(--text3)">(terjauh ${rupiah(rateTertinggi)} + drop)</span>
+          <input type="number" value="${r.biayaDrop||0}" oninput="setBiayaDrop(${r.dropGroup},this.value)" style="width:110px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px" placeholder="Rp">
+          <br><b id="drop-total-${r.dropGroup}" style="color:#0C447C">Total: ${rupiah(total)}</b><br>
+          <span style="color:var(--text3);font-size:10px">terjauh ${rupiah(rateTertinggi)} + drop</span>
         </div>`;
       }
     }
@@ -791,10 +796,14 @@ function closeSugg(id){ setTimeout(()=>{ const b=document.getElementById('sugg-'
 function renderRanks(){ renderTable(); }
 function pilihEksp(id,eksp,price){
   const r=rows.find(x=>x.id===id); if(!r) return;
-  // toggle: klik lagi yang sama = batal
-  if(norm(r.pilihEksp)===norm(eksp)){ r.pilihEksp=''; r.pilihHarga=0; }
-  else { r.pilihEksp=eksp; r.pilihHarga=price; }
-  if(r.isDraft){ updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); }
+  const batal = norm(r.pilihEksp)===norm(eksp);
+  // multidrop: semua baris grup ikut ekspedisi yang sama
+  const target = r.dropGroup ? rows.filter(x=>x.dropGroup===r.dropGroup) : [r];
+  target.forEach(x=>{
+    if(batal){ x.pilihEksp=''; x.pilihHarga=0; }
+    else { x.pilihEksp=eksp; x.pilihHarga=price; }
+    if(x.isDraft){ updateDraftField(x,'pilihEksp'); updateDraftField(x,'pilihHarga'); }
+  });
   renderTable();
 }
 
