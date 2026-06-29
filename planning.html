@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v27</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v30</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -181,9 +181,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
     <p class="hint" style="text-align:left;margin-bottom:8px">Centang tujuan lalu <b>Gabung Multi-drop</b> untuk 1 mobil banyak tujuan. Ketuk <b>klik</b> di rate untuk pilih ekspedisi.</p>
-    <div id="drop-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:#EEF6FF;border:1px solid #BBD8F5;border-radius:8px;margin-bottom:8px">
-      <span style="font-size:13px;color:#0C447C"><b id="drop-count">0</b> tujuan tercentang</span>
-      <button onclick="gabungMultidrop()" style="background:#0C447C;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🚚 Gabung Multi-drop</button>
+    <div id="drop-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:#EEF6FF;border:1px solid #BBD8F5;border-radius:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#0C447C"><b id="drop-count">0</b> tercentang</span>
+      <button id="btn-gabung" onclick="gabungMultidrop()" style="background:#0C447C;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🚚 Gabung Multi-drop</button>
+      <button onclick="hapusTercentang()" style="background:#DC2626;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Hapus Tercentang</button>
     </div>
     <div class="table-scroll">
       <table class="rate-tbl" id="rate-tbl"></table>
@@ -320,12 +321,13 @@ function loadHarga(tries){
     if(!rws.length){ setHargaStatus('⚠️ Data rate kosong'); return; }
     const head=rws[0].map(h=>norm(h));
     const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
-    const iV=idx(['vehicle']), iD=idx(['description','tujuan']), iP=idx(['price','harga']), iE=idx(['expedition','ekspedisi']);
+    const iV=idx(['vehicle']), iD=idx(['description','tujuan']), iP=idx(['price','harga']), iE=idx(['expedition','ekspedisi']), iK=idx(['kontak','no wa','whatsapp','no hp']);
     hargaData=rws.slice(1).filter(r=>r.length>1).map(r=>({
       expedition: cleanTxt(iE>=0?r[iE]:''),
       dest: cleanTxt(r[iD]||''),
       vtype: cleanTxt(r[iV]||''),
-      price: toNumber(r[iP])
+      price: toNumber(r[iP]),
+      kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
     })).filter(r=>r.dest && r.price>0);
     setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat') : '⚠️ Tidak ada rate valid');
     renderRanks();
@@ -594,12 +596,38 @@ function addRow(){
 }
 function delRow(id){
   const r=rows.find(x=>x.id===id);
-  if(r && r.isDraft && r.draft_id){
+  if(!r) return;
+  if(!confirm('Arsipkan order ini? Akan dipindah ke tab Arsip.')) return;
+  if(r.isDraft && r.draft_id){
     gasJSONP('action=deldraft&draft_id='+encodeURIComponent(r.draft_id));
+  } else if(r.fromSheet && r.noOrder){
+    // order final → hapus dari Order Armada
+    gasJSONP('action=delorder&no_order='+encodeURIComponent(r.noOrder)+'&tuj='+encodeURIComponent(r.tuj));
   }
-  rows=rows.filter(r=>r.id!==id);
+  rows=rows.filter(x=>x.id!==id);
   checkedIds.delete(id);
   renderRows();
+  toast('Order diarsipkan','ok');
+}
+
+// hapus beberapa sekaligus (yang tercentang)
+function hapusTercentang(){
+  const ids=[...checkedIds];
+  if(!ids.length){ toast('Centang order yang mau dihapus','err'); return; }
+  if(!confirm('Arsipkan '+ids.length+' order tercentang? Dipindah ke tab Arsip.')) return;
+  ids.forEach(id=>{
+    const r=rows.find(x=>x.id===id);
+    if(!r) return;
+    if(r.isDraft && r.draft_id){
+      gasJSONP('action=deldraft&draft_id='+encodeURIComponent(r.draft_id));
+    } else if(r.fromSheet && r.noOrder){
+      gasJSONP('action=delorder&no_order='+encodeURIComponent(r.noOrder)+'&tuj='+encodeURIComponent(r.tuj));
+    }
+  });
+  rows=rows.filter(x=>!checkedIds.has(x.id));
+  checkedIds.clear();
+  renderRows();
+  toast(ids.length+' order diarsipkan','ok');
 }
 
 // ===== MULTI-DROP =====
@@ -611,9 +639,12 @@ function updateDropBar(){
   const bar=document.getElementById('drop-bar');
   if(!bar) return;
   const n=checkedIds.size;
-  bar.style.display = n>=2 ? 'flex' : 'none';
+  bar.style.display = n>=1 ? 'flex' : 'none';
   const lbl=document.getElementById('drop-count');
   if(lbl) lbl.textContent=n;
+  // tombol gabung hanya aktif kalau >=2
+  const gbtn=document.getElementById('btn-gabung');
+  if(gbtn) gbtn.style.display = n>=2 ? 'inline-block' : 'none';
 }
 // gabungkan baris tercentang jadi 1 multi-drop
 function gabungMultidrop(){
@@ -925,6 +956,7 @@ function buildPesan(eksp){
 
   const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrd)+
     '&eksp='+encodeURIComponent(eksp)+
+    '&hp_eksp='+encodeURIComponent(kontakEksp(eksp))+
     '&admins='+encodeURIComponent(ADMINS);
 
   // PESAN 1: ke ekspedisi (tanpa approve)
@@ -1026,7 +1058,16 @@ function kirimBatch(){
 
 // Nomor HP ekspedisi: ambil dari hargaData kalau ada kolom hp; kalau tidak, kosong (user pilih kontak)
 function waNomorEksp(eksp){
-  return ''; // tidak ada kolom HP di sheet harga; WA buka tanpa nomor, user pilih kontak
+  return kontakEksp(eksp); // nomor utk membuka WA order ke ekspedisi
+}
+// cari kontak ekspedisi dari sheet harga, konversi 08xx → 628xx
+function kontakEksp(eksp){
+  if(!eksp) return '';
+  const hit = hargaData.find(h=> norm(h.expedition)===norm(eksp) && h.kontak);
+  if(!hit) return '';
+  let n = String(hit.kontak).replace(/\D/g,'');
+  if(n.indexOf('0')===0) n='62'+n.slice(1);
+  return n;
 }
 
 // ============ LOAD ORDER BELUM SELESAI DARI SHEET ============
