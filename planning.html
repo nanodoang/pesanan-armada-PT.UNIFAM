@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v30</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v31</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -509,7 +509,7 @@ function jamOptions(sel){
 
 // Opsi jenis truck (pilih manual)
 function truckOptions(sel){
-  const list=['20 FT','20 FT C','40 FT','FUSO 48','WINGBOX','CD 17','FUSO 27'];
+  const list=['20 FT','20 FT C','40 FT','FUSO 48','FUSO 32','FUSO 27','TRONTON 70','WINGBOX','CD 17'];
   let opt='<option value="">-- pilih --</option>';
   list.forEach(t=>{ opt+=`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`; });
   return opt;
@@ -524,9 +524,11 @@ function normalizeTipe(t){
     '20 ft c':'20 FT C','20ft c':'20 FT C','20 c':'20 FT C','20c':'20 FT C','20 ft combo':'20 FT C',
     '40 ft':'40 FT','40ft':'40 FT','40':'40 FT','40 hq':'40 FT','40 ft hq':'40 FT',
     'fuso 48':'FUSO 48','fuso48':'FUSO 48',
+    'fuso 32':'FUSO 32','fuso32':'FUSO 32',
+    'fuso 27':'FUSO 27','fuso27':'FUSO 27',
+    'tronton 70':'TRONTON 70','tronton70':'TRONTON 70','tronton':'TRONTON 70',
     'wingbox':'WINGBOX','wing box':'WINGBOX',
-    'cd 17':'CD 17','cd17':'CD 17',
-    'fuso 27':'FUSO 27','fuso27':'FUSO 27'
+    'cd 17':'CD 17','cd17':'CD 17'
   };
   return map[n] || t; // kalau tak dikenali, pakai apa adanya
 }
