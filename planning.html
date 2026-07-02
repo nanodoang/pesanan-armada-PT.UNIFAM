@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div>
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v31</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v32</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -492,6 +492,10 @@ function buildRowsFrom(records){
       toast(baru.length+' order tersimpan','ok');
       loadDraft(); // reload dari Sheet
     }else{
+      // tampilkan error asli dari server
+      const pesan = resp ? (resp.message || JSON.stringify(resp)) : 'tidak ada respons (cek koneksi/URL GAS)';
+      setHargaStatus('⚠️ Gagal simpan: '+pesan);
+      alert('GAGAL SIMPAN KE SHEET:\n\n'+pesan);
       toast('Gagal simpan ke Sheet','err');
     }
   });
