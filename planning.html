@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v38</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v39</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -986,7 +986,7 @@ function buildPesan(eksp){
   // item tunggal
   single.forEach(r=>{
     no++;
-    lines += no+'. '+tglShow(r)+' '+tampilJam(r.jam)+' | '+(r.tuj)+'\n   '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+    lines += no+'. '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
       const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
@@ -1011,7 +1011,8 @@ function buildPesan(eksp){
     const totalDrop = rateTertinggi + biayaDrop;
     const tujList = g.map(x=>x.tuj).join(' → ');
     lines += no+'. 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
-             '   '+tglShow(g[0])+' '+tampilJam(g[0].jam)+' | '+g[0].tipe+'\n'+
+             '   🗓️ Muat: '+tglShow(g[0])+', jam '+(tampilJam(g[0].jam)||'-')+'\n'+
+             '   🚛 '+g[0].tipe+'\n'+
              '   Rute: '+tujList+'\n'+
              '   Rate tertinggi: '+rupiah(rateTertinggi)+'\n'+
              '   Biaya drop: '+rupiah(biayaDrop)+'\n'+
