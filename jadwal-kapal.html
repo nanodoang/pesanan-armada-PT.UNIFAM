@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daftar Jadwal Kapal — PT. UNIFAM</title>
+<style>
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--amber:#B45309;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:16px 14px 50px}
+.hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:16px 20px;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.hdr a.back{background:rgba(255,255,255,.15);color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;flex-shrink:0}
+.hdr .ic{width:40px;height:40px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:21px}
+.hdr h1{font-size:17px;font-weight:800}
+.hdr p{font-size:11.5px;opacity:.85}
+.toolbar{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap}
+.search{flex:1;min-width:160px;padding:10px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:14px}
+.refresh{background:var(--navy);color:#fff;border:none;padding:10px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer}
+.tbl-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:6px 4px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:800;padding:11px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.kapal{font-weight:800;color:var(--navy-d)}
+.eksp{display:inline-block;background:#E7F7F0;color:var(--teal);font-weight:700;font-size:11px;padding:2px 9px;border-radius:20px}
+.rute{color:var(--ink);font-weight:600}
+.rute .arrow{color:var(--muted);margin:0 4px}
+.tgl{white-space:nowrap;font-weight:600}
+.tgl.tiba{color:var(--teal)}
+.status-empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
+.count{font-size:12px;color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <a href="planning.html" class="back">← Planning</a>
+    <div class="ic">🚢</div>
+    <div>
+      <h1>Daftar Jadwal Kapal</h1>
+      <p>PT. UNIFAM — Jadwal keberangkatan dari ekspedisi</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="Cari kapal / ekspedisi / rute…" oninput="render()">
+    <span class="count" id="count"></span>
+    <button class="refresh" onclick="muat()">↻ Refresh</button>
+  </div>
+
+  <div class="tbl-card">
+    <table>
+      <thead>
+        <tr><th>Ekspedisi</th><th>Nama Kapal</th><th>Rute</th><th>Berangkat</th><th>Tiba</th><th>Catatan</th></tr>
+      </thead>
+      <tbody id="body">
+        <tr><td colspan="6" class="loading">Memuat jadwal kapal…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="foot">PT. UNIFAM · Daftar jadwal kapal</p>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
+let DATA=[];
+
+function muat(){
+  document.getElementById('body').innerHTML='<tr><td colspan="6" class="loading">Memuat jadwal kapal…</td></tr>';
+  const cb='cbGetKapal'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    DATA=(resp&&resp.items)?resp.items:[];
+    render();
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getkapal&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; document.getElementById('body').innerHTML='<tr><td colspan="6" class="status-empty">Gagal memuat data</td></tr>'; };
+  document.body.appendChild(sc);
+}
+
+function render(){
+  const q=document.getElementById('search').value.toLowerCase().trim();
+  let rows=DATA;
+  if(q){
+    rows=DATA.filter(d=>(d.kapal+' '+d.eksp+' '+d.asal+' '+d.tujuan).toLowerCase().includes(q));
+  }
+  document.getElementById('count').textContent=rows.length+' jadwal';
+  if(!rows.length){
+    document.getElementById('body').innerHTML='<tr><td colspan="6" class="status-empty">Belum ada jadwal kapal'+(q?' yang cocok':'')+'</td></tr>';
+    return;
+  }
+  document.getElementById('body').innerHTML=rows.map(d=>`
+    <tr>
+      <td><span class="eksp">${esc(d.eksp)||'—'}</span></td>
+      <td class="kapal">🚢 ${esc(d.kapal)}</td>
+      <td class="rute">${esc(d.asal)}<span class="arrow">→</span>${esc(d.tujuan)}</td>
+      <td class="tgl">${esc(d.berangkat)||'-'}</td>
+      <td class="tgl tiba">${esc(d.tiba)||'-'}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(d.catatan)||''}</td>
+    </tr>`).join('');
+}
+function esc(s){return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+muat();
+</script>
+</body>
+</html>

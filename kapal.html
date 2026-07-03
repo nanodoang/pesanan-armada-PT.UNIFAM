@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jadwal Kapal — PT. UNIFAM</title>
+<style>
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:520px;margin:0 auto;padding:16px 14px 50px}
+.hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:18px 20px;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.hdr .ic{width:44px;height:44px;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.hdr h1{font-size:18px;font-weight:800}
+.hdr p{font-size:12px;opacity:.85;margin-top:2px}
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:18px 18px;margin-bottom:14px}
+.eksp-tag{display:inline-block;background:#E7F7F0;color:var(--teal);font-weight:800;font-size:13px;padding:5px 12px;border-radius:20px;margin-bottom:16px}
+label{display:block;font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:5px;margin-top:14px}
+label:first-of-type{margin-top:0}
+input,textarea{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff}
+input:focus,textarea:focus{outline:none;border-color:var(--navy)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:11px;color:var(--muted);margin-top:3px}
+.btn{width:100%;background:var(--navy);color:#fff;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;margin-top:20px}
+.btn:active{background:var(--navy-d)}
+.btn:disabled{opacity:.6}
+.msg{padding:12px 14px;border-radius:9px;font-size:13px;font-weight:600;margin-top:14px;display:none}
+.msg.ok{background:#DCFCE7;color:#15803D;display:block}
+.msg.err{background:#FEE2E2;color:#B91C1C;display:block}
+.foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="ic">🚢</div>
+    <div>
+      <h1>Input Jadwal Kapal</h1>
+      <p>PT. UNIFAM — Isi jadwal keberangkatan kapal</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="eksp-tag" id="eksp-tag">Ekspedisi: —</div>
+
+    <label>Nama Kapal</label>
+    <input type="text" id="kapal" placeholder="Contoh: KM Dobonsolo" autocomplete="off">
+
+    <div class="row2">
+      <div>
+        <label>Asal (Pelabuhan)</label>
+        <input type="text" id="asal" placeholder="Surabaya" autocomplete="off">
+      </div>
+      <div>
+        <label>Tujuan (Pelabuhan)</label>
+        <input type="text" id="tujuan" placeholder="Makassar" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label>Tgl Berangkat</label>
+        <input type="date" id="berangkat">
+      </div>
+      <div>
+        <label>Tgl Tiba</label>
+        <input type="date" id="tiba">
+      </div>
+    </div>
+
+    <label>Catatan (opsional)</label>
+    <textarea id="catatan" rows="2" placeholder="Info tambahan, mis. estimasi cuaca / delay"></textarea>
+
+    <button class="btn" id="btn-simpan" onclick="simpan()">Simpan Jadwal Kapal</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <p class="foot">PT. UNIFAM · Form jadwal kapal ekspedisi</p>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
+const params=new URLSearchParams(location.search);
+const EKSP=(params.get('eksp')||'').trim();
+document.getElementById('eksp-tag').textContent='Ekspedisi: '+(EKSP||'(tidak diketahui)');
+
+function showMsg(t,ok){const m=document.getElementById('msg');m.textContent=t;m.className='msg '+(ok?'ok':'err');}
+
+function simpan(){
+  const kapal=document.getElementById('kapal').value.trim();
+  const asal=document.getElementById('asal').value.trim();
+  const tujuan=document.getElementById('tujuan').value.trim();
+  const berangkat=document.getElementById('berangkat').value;
+  const tiba=document.getElementById('tiba').value;
+  const catatan=document.getElementById('catatan').value.trim();
+
+  if(!kapal){ showMsg('Nama kapal wajib diisi',false); return; }
+  if(!asal||!tujuan){ showMsg('Asal & tujuan wajib diisi',false); return; }
+  if(!berangkat){ showMsg('Tanggal berangkat wajib diisi',false); return; }
+
+  const btn=document.getElementById('btn-simpan');
+  btn.disabled=true; btn.textContent='Menyimpan…';
+
+  const cb='cbKapal'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    btn.disabled=false; btn.textContent='Simpan Jadwal Kapal';
+    if(resp && resp.status==='ok'){
+      showMsg('✓ Jadwal kapal '+kapal+' berhasil tersimpan. Terima kasih!',true);
+      // reset form
+      document.getElementById('kapal').value='';
+      document.getElementById('asal').value='';
+      document.getElementById('tujuan').value='';
+      document.getElementById('berangkat').value='';
+      document.getElementById('tiba').value='';
+      document.getElementById('catatan').value='';
+    }else{
+      showMsg('Gagal menyimpan: '+(resp&&resp.message?resp.message:'coba lagi'),false);
+    }
+  };
+  const q='action=savekapal'+
+    '&eksp='+encodeURIComponent(EKSP)+
+    '&kapal='+encodeURIComponent(kapal)+
+    '&asal='+encodeURIComponent(asal)+
+    '&tujuan='+encodeURIComponent(tujuan)+
+    '&berangkat='+encodeURIComponent(berangkat)+
+    '&tiba='+encodeURIComponent(tiba)+
+    '&catatan='+encodeURIComponent(catatan)+
+    '&callback='+cb;
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?'+q;
+  sc.onerror=function(){ delete window[cb]; btn.disabled=false; btn.textContent='Simpan Jadwal Kapal'; showMsg('Gagal terhubung ke server',false); };
+  document.body.appendChild(sc);
+}
+</script>
+</body>
+</html>
