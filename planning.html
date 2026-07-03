@@ -105,6 +105,40 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 
 /* TABEL RATE */
 .table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:#fff;-webkit-overflow-scrolling:touch}
+/* ==== MODE KARTU (HP) ==== */
+#card-wrap{display:none;flex-direction:column;gap:11px}
+.ocard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 13px}
+.ocard.sel{border-color:#A8E0C9}
+.ocard.drop{border-color:#0C447C;background:#F7FAFF}
+.oc-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px}
+.oc-chk{width:18px;height:18px;flex-shrink:0;margin-top:1px}
+.oc-tuj{font-size:13px;font-weight:700;color:var(--text)}
+.oc-meta{font-size:10px;color:var(--text3);margin-top:1px}
+.oc-badge{font-size:8.5px;padding:2px 7px;border-radius:10px;font-weight:700;white-space:nowrap;flex-shrink:0}
+.oc-row2{display:flex;gap:7px;margin-bottom:11px}
+.oc-row2>div{flex:1}
+.oc-lbl{font-size:8px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:.3px}
+.oc-row2 select{width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;font-size:11.5px;font-family:inherit;background:#fff}
+.oc-rate-lbl{font-size:8px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px}
+.oc-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.oc-rk{background:#fff;border:1px solid var(--border);border-radius:7px;padding:6px 8px;cursor:pointer;text-align:left}
+.oc-rk:active{background:#F0F7FF}
+.oc-rk.r1{background:#EAF7F1;border-color:#A8E0C9}
+.oc-rk.on{background:#0C447C;border-color:#0C447C}
+.oc-rk.on *{color:#fff !important}
+.oc-rk-top{display:flex;align-items:center;gap:4px;margin-bottom:2px}
+.oc-rk-num{font-size:7.5px;padding:1px 5px;border-radius:8px;font-weight:700;background:#EEF2F7;color:var(--text3)}
+.oc-rk.r1 .oc-rk-num{background:#0F6E56;color:#fff}
+.oc-rk-eksp{font-size:11px;font-weight:700}
+.oc-rk-rate{font-size:11px;font-weight:700}
+.oc-rk.r1 .oc-rk-rate{color:#0F6E56}
+.oc-more{text-align:center;padding:6px 0 0;font-size:10px;color:var(--navy);font-weight:700;cursor:pointer}
+.oc-na{font-size:11px;color:var(--text3);text-align:center;padding:8px}
+.oc-drop-panel{margin-top:10px;padding:9px;background:#EEF6FF;border-radius:8px;font-size:11px}
+@media(max-width:760px){
+  #tbl-wrap{display:none}
+  #card-wrap{display:flex}
+}
 .rate-tbl{border-collapse:collapse;font-size:12px;min-width:100%;white-space:nowrap}
 .rate-tbl th,.rate-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);border-right:1px solid #EEF2F7;text-align:left;vertical-align:middle}
 .rate-tbl thead th{background:var(--navy);color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
@@ -143,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v39</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v40</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -190,9 +224,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <button id="btn-gabung" onclick="gabungMultidrop()" style="background:#0C447C;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🚚 Gabung Multi-drop</button>
       <button onclick="hapusTercentang()" style="background:#DC2626;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Hapus Tercentang</button>
     </div>
-    <div class="table-scroll">
+    <div class="table-scroll" id="tbl-wrap">
       <table class="rate-tbl" id="rate-tbl"></table>
     </div>
+    <div id="card-wrap"></div>
   </div>
 
   <!-- TAHAP 2: GROUP PER EKSPEDISI -->
@@ -784,7 +819,94 @@ function updateDraftField(r, field){
 }
 function renderRows(){
   renderTable();
+  renderCards();
 }
+
+// ==== MODE KARTU (HP) ====
+let expandRate={}; // id -> true kalau tampil semua rate
+function renderCards(){
+  const wrap=document.getElementById('card-wrap');
+  if(!wrap) return;
+  if(!rows.length){ wrap.innerHTML=''; return; }
+  let html='';
+  rows.forEach((r,i)=>{
+    const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
+    const st = r.status || 'Baru';
+    let badge, cls='ocard';
+    if(st==='Belum') badge='<span class="oc-badge st-belum">⏳ Belum</span>';
+    else if(st==='Tidak') badge='<span class="oc-badge st-tidak">❌ Tidak</span>';
+    else badge='<span class="oc-badge st-baru">🆕 Baru</span>';
+    if(r.pilihEksp) cls+=' sel';
+    if(r.dropGroup) cls+=' drop';
+    const checked = checkedIds.has(r.id) ? 'checked' : '';
+    const kartonInfo = r.total ? (' · '+r.total+' krt') : (r.kubik?(' · '+r.kubik+' m³'):'');
+    const jamInfo = tampilJam(r.jam) ? (', '+tampilJam(r.jam)) : '';
+    const metaTgl = (r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText));
+
+    // rate grid
+    let rateHtml='';
+    if(!r.tipe){
+      rateHtml='<div class="oc-na">Pilih truck dulu untuk lihat rate</div>';
+    }else if(!rank.length){
+      rateHtml='<div class="oc-na">Rate tidak ditemukan</div>';
+    }else{
+      const tampil = expandRate[r.id] ? rank.length : Math.min(4, rank.length);
+      let cells='';
+      for(let k=0;k<tampil;k++){
+        const h=rank[k];
+        const on = norm(r.pilihEksp)===norm(h.expedition);
+        const eksp=(h.expedition||'-').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        cells+=`<div class="oc-rk ${k===0?'r1':''} ${on?'on':''}" onclick="pilihEksp(${r.id},&quot;${eksp}&quot;,${h.price})">
+          <div class="oc-rk-top"><span class="oc-rk-num">${on?'✓':('R'+(k+1))}</span><span class="oc-rk-eksp">${h.expedition||'-'}</span></div>
+          <div class="oc-rk-rate">${rupiah(h.price)}</div>
+        </div>`;
+      }
+      rateHtml='<div class="oc-grid">'+cells+'</div>';
+      if(rank.length>4){
+        rateHtml+=`<div class="oc-more" onclick="toggleRate(${r.id})">${expandRate[r.id]?'▲ tampilkan 4 saja':('+ '+(rank.length-4)+' ekspedisi lainnya ▾')}</div>`;
+      }
+    }
+
+    // panel multidrop (baris pertama grup)
+    let dropPanel='';
+    if(r.dropGroup){
+      const grpRows=rows.filter(x=>x.dropGroup===r.dropGroup);
+      const isFirst=grpRows[0].id===r.id;
+      badge+=' <span class="oc-badge st-drop">🚚 MD'+r.dropGroup+'</span>';
+      if(isFirst){
+        const rateTertinggi=Math.max(...grpRows.map(x=>x.pilihHarga||0));
+        const total=rateTertinggi+(r.biayaDrop||0);
+        dropPanel=`<div class="oc-drop-panel">
+          <button onclick="pisahMultidrop(${r.dropGroup})" style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:5px;font-size:10px;padding:3px 8px;cursor:pointer">✕ Pisah Multidrop</button>
+          <div style="margin-top:6px">Biaya tambahan: <input type="number" value="${r.biayaDrop||0}" oninput="setBiayaDrop(${r.dropGroup},this.value)" style="width:110px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;font-size:11px"></div>
+          <b id="drop-total-${r.dropGroup}" style="color:#0C447C;display:block;margin-top:4px">Total: ${rupiah(total)}</b>
+          <span style="color:var(--text3);font-size:10px">terjauh ${rupiah(rateTertinggi)} + drop</span>
+        </div>`;
+      }
+    }
+
+    html+=`<div class="${cls}">
+      <div class="oc-head">
+        <input type="checkbox" class="oc-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)">
+        <div style="flex:1;min-width:0">
+          <div class="oc-tuj">${r.tuj||'<span class="tbl-na">(belum diisi)</span>'}</div>
+          <div class="oc-meta">🗓️ ${metaTgl}${jamInfo}${kartonInfo}</div>
+        </div>
+        ${badge}
+        <button class="btn-hapus" onclick="delRow(${r.id})" style="flex-shrink:0">🗑️</button>
+      </div>
+      <div class="oc-row2">
+        <div><div class="oc-lbl">Truck</div><select class="truck-sel" onchange="setTipe(${r.id},this.value)">${truckOptions(r.tipe)}</select></div>
+        <div><div class="oc-lbl">Jam Muat</div><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></div>
+      </div>
+      <div class="oc-rate-lbl">Pilih ekspedisi · urut termurah:</div>
+      ${rateHtml}
+      ${dropPanel}
+    </div>`;
+  });
+  wrap.innerHTML=html;
+}
+function toggleRate(id){ expandRate[id]=!expandRate[id]; renderCards(); }
 
 // Tabel perbandingan rate dengan Rank 1-4 + tombol klik
 function renderTable(){
@@ -880,8 +1002,8 @@ function renderTable(){
   }
 }
 
-function setField(id,key,val){ const r=rows.find(x=>x.id===id); if(r){ r[key]=val; if(r.isDraft) updateDraftField(r,key); } if(key==='tgl') renderTable(); }
-function setTipe(id,val){ const r=rows.find(x=>x.id===id); if(r){ r.tipe=val; r.pilihEksp=''; r.pilihHarga=0; if(r.isDraft){ updateDraftField(r,'tipe'); updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); } } renderTable(); }
+function setField(id,key,val){ const r=rows.find(x=>x.id===id); if(r){ r[key]=val; if(r.isDraft) updateDraftField(r,key); } if(key==='tgl') renderRows(); }
+function setTipe(id,val){ const r=rows.find(x=>x.id===id); if(r){ r.tipe=val; r.pilihEksp=''; r.pilihHarga=0; if(r.isDraft){ updateDraftField(r,'tipe'); updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); } } renderRows(); }
 
 // autocomplete
 function onTuj(id){
@@ -889,23 +1011,23 @@ function onTuj(id){
   if(r){ r.tuj=inp.value; r.pilihEksp=''; r.pilihHarga=0; }
   const box=document.getElementById('sugg-'+id);
   const t=norm(inp.value);
-  if(!t||!distData.length){ box.innerHTML=''; renderTable(); return; }
+  if(!t||!distData.length){ box.innerHTML=''; renderRows(); return; }
   const hits=distData.filter(d=>norm(d.kota).includes(t)||norm(d.dist).includes(t)).slice(0,6);
   box.innerHTML = hits.length ? '<div class="dist-sugg">'+hits.map(d=>{
     const v=d.dist.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
     return `<div class="dist-item" onmousedown="pickDist(${id},&quot;${v}&quot;)"><b>${d.dist}</b></div>`;
   }).join('')+'</div>' : '';
-  renderTable();
+  renderRows();
 }
 function pickDist(id,val){
   const r=rows.find(x=>x.id===id); if(r){ r.tuj=val; r.pilihEksp=''; r.pilihHarga=0; }
   const inp=document.getElementById('tuj-'+id); if(inp) inp.value=val;
-  closeSugg(id); renderTable();
+  closeSugg(id); renderRows();
 }
 function closeSugg(id){ setTimeout(()=>{ const b=document.getElementById('sugg-'+id); if(b) b.innerHTML=''; },150); }
 
 // render ulang tabel saat data harga siap
-function renderRanks(){ renderTable(); }
+function renderRanks(){ renderRows(); }
 function pilihEksp(id,eksp,price){
   const r=rows.find(x=>x.id===id); if(!r) return;
   const batal = norm(r.pilihEksp)===norm(eksp);
@@ -916,7 +1038,7 @@ function pilihEksp(id,eksp,price){
     else { x.pilihEksp=eksp; x.pilihHarga=price; }
     if(x.isDraft){ updateDraftField(x,'pilihEksp'); updateDraftField(x,'pilihHarga'); }
   });
-  renderTable();
+  renderRows();
 }
 
 // ============ TAHAP 2: GROUP ============
