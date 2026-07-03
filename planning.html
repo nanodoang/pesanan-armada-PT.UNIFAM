@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v36</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v37</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -236,7 +236,7 @@ let HARGA_CSV     = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwo
 // Data planning (No, Tanggal, Destination) — auto-load dari sheet
 let PLANNING_CSV  = ''; // upload/paste manual (tidak auto dari sheet)
 // GANTI dengan link CSV Master Distributor (opsional, utk autocomplete manual)
-const MASTER_DIST_CSV = 'PASTE_LINK_CSV_MASTER_DISTRIBUTOR_DISINI';
+const MASTER_DIST_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWWl6xUcwoS3ym-dPPunI4XIWrZoi8VbeKDV-myqhTIdpsBGM7AgzXXWUFidZJTFjXgCyGANUR-vjf/pub?gid=852059310&single=true&output=csv';
 const ADMINS = '6285885549707';
 
 // Mapping label tipe → istilah sheet harga (samakan dengan konfirmasi.html)
@@ -359,19 +359,67 @@ function muatRateManual(){
   document.getElementById('rate-fallback').style.display='none';
   loadHarga(0);
 }
+let seqMap = {}; // norm(delivery name) -> {seq: angka, waktu: 'pagi'/'siang', raw}
 function loadDist(){
   if(!MASTER_DIST_CSV || MASTER_DIST_CSV.indexOf('PASTE_LINK')===0) return;
   fetch(MASTER_DIST_CSV).then(r=>r.text()).then(txt=>{
     const rws=parseCSV(txt);
     if(!rws.length) return;
     const head=rws[0].map(h=>norm(h));
-    let iK=head.findIndex(h=>h.includes('kota')||h.includes('province'));
-    let iN=head.findIndex(h=>h.includes('delivery')||h.includes('distributor')||h.includes('dist'));
-    if(iK<0)iK=0; if(iN<0)iN=1;
-    const seen={};
-    distData=rws.slice(1).filter(r=>r.length>1).map(r=>({kota:cleanTxt(r[iK]),dist:cleanTxt(r[iN])}))
-      .filter(r=>{ if(!r.kota||!r.dist)return false; const k=norm(r.dist); if(seen[k])return false; seen[k]=1; return true; });
-  }).catch(e=>console.warn('dist',e));
+    let iN=head.findIndex(h=>h.includes('delivery')||h.includes('distributor')||h.includes('dist name')||h.includes('nama'));
+    let iS=head.findIndex(h=>h.includes('seq'));
+    if(iN<0)iN=0; if(iS<0)iS=1;
+    seqMap={};
+    rws.slice(1).forEach(r=>{
+      const nama=cleanTxt(r[iN]||'');
+      const seqRaw=cleanTxt(r[iS]||'');
+      if(!nama) return;
+      // ekstrak angka & waktu dari "Seq 2 - Siang"
+      const mAngka=seqRaw.match(/(\d+)/);
+      const seq=mAngka?parseInt(mAngka[1],10):999;
+      const waktu=/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':'');
+      seqMap[norm(nama)]={seq:seq, waktu:waktu, raw:seqRaw};
+    });
+    // setelah master siap, hitung jam muat
+    hitungJamMuat();
+  }).catch(e=>console.warn('master dist',e));
+}
+
+// ==== HITUNG JAM MUAT OTOMATIS (2 jalur paralel, 1000 karton/jam) ====
+const MUAT_MULAI = 7*60;      // 07:00 dalam menit
+const KARTON_PER_JAM = 1000;
+function menitKeJam(m){
+  const h=Math.floor(m/60), mm=Math.round(m%60);
+  return ('0'+h).slice(-2)+':'+('0'+mm).slice(-2);
+}
+function hitungJamMuat(){
+  if(!rows.length || !Object.keys(seqMap).length) return;
+  // hanya order yang punya karton (total) & belum multidrop-child rumit
+  const list=rows.map(r=>{
+    const info=seqMap[norm(r.tuj)];
+    const karton=toNumber(r.total)||0;
+    return { r:r, seq: info?info.seq:9999, ketemu:!!info, karton:karton };
+  });
+  // urut by sequence (kecil dulu), lalu karton
+  list.sort((a,b)=> a.seq-b.seq || b.karton-a.karton);
+  // 2 jalur: waktu selesai tiap jalur (menit)
+  const jalur=[MUAT_MULAI, MUAT_MULAI]; // A, B
+  list.forEach(item=>{
+    if(!item.ketemu){
+      item.r.jam='CEK MANUAL';
+      item.r.jamMuatAuto=true;
+      return;
+    }
+    // pilih jalur yang lebih dulu kosong
+    const idx = jalur[0]<=jalur[1] ? 0 : 1;
+    const mulai = jalur[idx];
+    item.r.jam = menitKeJam(mulai);
+    item.r.jamMuatAuto = true;
+    // durasi = karton/1000 jam → menit
+    const durasi = (item.karton/KARTON_PER_JAM)*60;
+    jalur[idx] = mulai + durasi;
+  });
+  renderRows();
 }
 
 // Auto-load data planning (No, Tanggal, Destination, Truck) dari sheet
@@ -519,6 +567,11 @@ function simpanDraftBatch(list, mulai, sukses){
 // Opsi jam kelipatan 30 menit
 function jamOptions(sel){
   let opt='<option value="">--:--</option>';
+  // nilai auto non-standar (mis. 09:18) atau CEK MANUAL → tetap tampilkan
+  const standar = /^\d{2}:(00|30)$/.test(sel);
+  if(sel && !standar){
+    opt+=`<option value="${sel}" selected>${sel}</option>`;
+  }
   for(let h=0;h<24;h++) for(let m=0;m<60;m+=30){
     const hh=String(h).padStart(2,'0'), mm=String(m).padStart(2,'0'), v=hh+':'+mm;
     opt+=`<option value="${v}" ${sel===v?'selected':''}>${v}</option>`;
@@ -1157,6 +1210,7 @@ function loadDraft(silent){
     rows = draftRows.concat(rows.filter(r=>!r.isDraft));
     renderRows();
     setLastSync();
+    hitungJamMuat(); // isi jam muat otomatis
     loadFromSheet(true); // lalu muat order final juga
   });
 }
