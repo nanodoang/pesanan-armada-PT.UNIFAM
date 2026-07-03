@@ -143,7 +143,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v37</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v38</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -466,11 +466,18 @@ function getRanking(tujuan, tipe){
   const full = norm(tujuan);
   const kota = extractKota(tujuan);
   const v = norm(mapTipe(tipe));
-  // cocok kalau Description sheet == kota, atau saling mengandung (toleran)
+  // versi tanpa spasi (biar "TANJUNGPINANG" == "Tanjung Pinang")
+  const noSpace = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const kotaNS = noSpace(kota), fullNS = noSpace(tujuan);
+  // cocok kalau Description sheet == kota, atau saling mengandung (toleran, abaikan spasi)
   const destMatch = h => {
     const d = norm(h.dest);
     if(!d) return false;
-    return d===kota || d===full || d.includes(kota) || kota.includes(d) || full.includes(d);
+    if(d===kota || d===full || d.includes(kota) || kota.includes(d) || full.includes(d)) return true;
+    // bandingkan tanpa spasi/tanda baca
+    const dNS = noSpace(h.dest);
+    if(!dNS) return false;
+    return dNS===kotaNS || dNS===fullNS || dNS.includes(kotaNS) || kotaNS.includes(dNS) || fullNS.includes(dNS);
   };
   let list=hargaData.filter(h=>destMatch(h) && (!v || norm(h.vtype)===v));
   // dedup per ekspedisi (ambil termurah)
