@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v41</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v42</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -422,10 +422,12 @@ function loadDist(){
 
 // ==== HITUNG JAM MUAT OTOMATIS (2 jalur paralel, 1000 karton/jam) ====
 const MUAT_MULAI = 7*60;      // 07:00 dalam menit
-const KARTON_PER_JAM = 1000;
+const KARTON_PER_JAM = 1450;  // target muat per jam
 function menitKeJam(m){
-  const h=Math.floor(m/60), mm=Math.round(m%60);
-  return ('0'+h).slice(-2)+':'+('0'+mm).slice(-2);
+  // balik ke hari baru kalau lewat 24 jam (jangan akumulasi 25:00 dst)
+  let mm = ((m % 1440) + 1440) % 1440;
+  const h=Math.floor(mm/60), mn=Math.round(mm%60);
+  return ('0'+h).slice(-2)+':'+('0'+mn).slice(-2);
 }
 function hitungJamMuat(){
   if(!rows.length || !Object.keys(seqMap).length) return;
@@ -450,7 +452,7 @@ function hitungJamMuat(){
     const mulai = jalur[idx];
     item.r.jam = menitKeJam(mulai);
     item.r.jamMuatAuto = true;
-    // durasi = karton/1000 jam → menit
+    // durasi = karton/1450 jam → menit
     const durasi = (item.karton/KARTON_PER_JAM)*60;
     jalur[idx] = mulai + durasi;
   });
