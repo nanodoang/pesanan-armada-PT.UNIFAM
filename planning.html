@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v42</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v43</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -655,14 +655,16 @@ function recordsFromMatrix(matrix){
   // default posisi sesuai header baru
   let start=0, iTgl=0, iSales=1, iDest=2, iTotal=3, iKubik=4, iTipe=5;
   const head=matrix[0].map(c=>norm(c));
-  const hasHeader = head.some(c=>c.includes('dist')||c.includes('dest')||c.includes('tujuan')||c.includes('tanggal')||c.includes('tgl')||c.includes('truck')||c.includes('m3')||c.includes('sales'));
+  // deteksi header: cocok kata utuh (hindari "DESTI" ketangkap sbg "dest")
+  const kataHeader=['distributor','destination','tujuan','tanggal','tgl','truck type','truck','sum of m3','m3','sales admin','kubikasi','delivery name'];
+  const hasHeader = head.some(c=> kataHeader.some(k=> c===k || c===k.replace(/\s/g,'')) );
   if(hasHeader){
-    const fT=head.findIndex(c=>c.includes('tanggal')||c.includes('tgl')||c.includes('date'));
-    const fSales=head.findIndex(c=>c.includes('sales')||c.includes('admin'));
-    const fD=head.findIndex(c=>c.includes('dist')||c.includes('dest')||c.includes('tujuan')||c.includes('delivery'));
-    const fTotal=head.findIndex(c=>c.includes('total')||c.includes('order'));
-    const fKub=head.findIndex(c=>c.includes('m3')||c.includes('kubik')||c.includes('cbm')||c.includes('volume'));
-    const fK=head.findIndex(c=>c.includes('truck')||c.includes('type')||c.includes('kendaraan')||c.includes('tipe'));
+    const fT=head.findIndex(c=>c==='tanggal'||c==='tgl'||c==='date');
+    const fSales=head.findIndex(c=>c.includes('sales')||c==='admin');
+    const fD=head.findIndex(c=>c==='distributor'||c==='destination'||c==='tujuan'||c==='dist'||c==='delivery name'||c==='dest');
+    const fTotal=head.findIndex(c=>c==='total'||c.includes('total order'));
+    const fKub=head.findIndex(c=>c.includes('m3')||c==='kubikasi'||c==='cbm'||c==='volume');
+    const fK=head.findIndex(c=>c.includes('truck')||c==='type'||c==='kendaraan'||c==='tipe');
     if(fT>=0)iTgl=fT; if(fSales>=0)iSales=fSales; if(fD>=0)iDest=fD;
     if(fTotal>=0)iTotal=fTotal; if(fKub>=0)iKubik=fKub; if(fK>=0)iTipe=fK;
     start=1;
