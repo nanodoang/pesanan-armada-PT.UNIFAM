@@ -4,14 +4,21 @@ const LOGO_SMALL_B64 = "image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA4QAAAHACAYAAAD
 
 /* ============================================================================
  * Evaluasi Kinerja Ekspedisi — app.js
- * VERSION: v6 (2026-07-06) — fix PPTX korup: nilai null (mis. FAM kosong)
- *          yg lolos masuk ke chart bikin file .pptx tidak valid — sekarang
- *          disanitasi ke 0 sebelum masuk chart. Juga fix: skala sumbu chart
- *          sekarang dinamis (dulu fixed, bisa motong bar kalau skor ekspedisi
- *          jauh di bawah target), dan nama ekspedisi panjang (mis. "Sentosa
- *          Prima Abadi (SPA)") sekarang auto-mengecil fontnya di cover biar
- *          tidak tabrakan sama teks Periode di bawahnya.
+ * VERSION: v7 (2026-07-06) — FIX KRITIS: file PPTX ke-generate KORUP
+ *          ("PowerPoint found a problem, click Repair"). Akar masalah:
+ *          pres.writeFile() bawaan pptxgenjs bikin ZIP dgn 19 entry folder
+ *          kosong + tanpa kompresi — LibreOffice/python-pptx toleran, tapi
+ *          PowerPoint asli menolak. Sekarang generate ke arraybuffer lalu
+ *          RE-ZIP manual pakai JSZip (proper DEFLATE, tanpa folder entry)
+ *          sebelum didownload. Sudah diverifikasi ulang pakai pptxgenjs+
+ *          JSZip asli (bukan stub) — 0 folder kosong, semua DEFLATE, valid
+ *          dibuka python-pptx & LibreOffice.
+ *          Juga fix: nilai null (FAM kosong) di-sanitasi ke 0 sebelum masuk
+ *          chart, skala sumbu chart dinamis, font nama ekspedisi panjang
+ *          auto-mengecil di cover slide.
  * VERSION HISTORY:
+ *   v6 — fix null values in chart + dynamic axis scale + long name overlap
+ *        (masih pakai writeFile lama, korup bug BELUM ketemu akar masalahnya)
  *   v5 — fix timezone bug fmtDate() + cache-busting fetch()
  *   v4 — ganti jalur utama fetch data dari JSONP ke fetch() langsung
  *   v3 — tambah tombol "Tes Koneksi" (fetch + JSONP diagnostik)
@@ -636,7 +643,28 @@ async function generatePptx(d) {
     s8.addText('PT. UNIFAM  —  Divisi Logistik & Transportasi', { x: 0, y: 6.05, w: W, h: 0.4, fontSize: 12, color: GREY, align: 'center', fontFace: 'Calibri', margin: 0 });
 
     const fileName = `Evaluasi_Kinerja_${d.ekspedisi.replace(/\s+/g, '_')}_${Date.now()}.pptx`;
-    await pres.writeFile({ fileName });
+    // PENTING: pres.writeFile() pakai ZIP writer bawaan pptxgenjs yang
+    // menyisipkan entry folder kosong + tanpa kompresi (STORE). LibreOffice
+    // & python-pptx toleran soal ini, tapi PowerPoint ASLI menolaknya dan
+    // minta "Repair". Solusinya: generate ke arraybuffer dulu, lalu re-zip
+    // manual pakai JSZip (proper DEFLATE, tanpa entry folder) baru didownload.
+    const rawBuffer = await pres.write('arraybuffer');
+    const sourceZip = await JSZip.loadAsync(rawBuffer);
+    const cleanZip = new JSZip();
+    const fileEntries = Object.keys(sourceZip.files).filter(name => !sourceZip.files[name].dir);
+    await Promise.all(fileEntries.map(async (name) => {
+      const content = await sourceZip.files[name].async('uint8array');
+      cleanZip.file(name, content, { compression: 'DEFLATE', createFolders: false, dir: false });
+    }));
+    const cleanBlob = await cleanZip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(cleanBlob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   } catch (e) {
     alert('Gagal membuat PPTX: ' + e.message);
     console.error(e);
