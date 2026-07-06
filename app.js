@@ -4,11 +4,15 @@ const LOGO_SMALL_B64 = "image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA4QAAAHACAYAAAD
 
 /* ============================================================================
  * Evaluasi Kinerja Ekspedisi — app.js
- * VERSION: v5 (2026-07-06) — fix 2 bug: (1) fmtDate() pakai toISOString()
- *          yg geser tanggal krn timezone (WIB tanggal akhir bulan kepotong
- *          1 hari), (2) fetch() ditambah cache-busting + cache:'no-store'
- *          krn dicurigai hasil API ke-cache basi (41 ekspedisi jadi cuma 5)
+ * VERSION: v6 (2026-07-06) — fix PPTX korup: nilai null (mis. FAM kosong)
+ *          yg lolos masuk ke chart bikin file .pptx tidak valid — sekarang
+ *          disanitasi ke 0 sebelum masuk chart. Juga fix: skala sumbu chart
+ *          sekarang dinamis (dulu fixed, bisa motong bar kalau skor ekspedisi
+ *          jauh di bawah target), dan nama ekspedisi panjang (mis. "Sentosa
+ *          Prima Abadi (SPA)") sekarang auto-mengecil fontnya di cover biar
+ *          tidak tabrakan sama teks Periode di bawahnya.
  * VERSION HISTORY:
+ *   v5 — fix timezone bug fmtDate() + cache-busting fetch()
  *   v4 — ganti jalur utama fetch data dari JSONP ke fetch() langsung
  *   v3 — tambah tombol "Tes Koneksi" (fetch + JSONP diagnostik)
  *   v2 — dropdown pilih ekspedisi langsung, data label di chart, mock miss
@@ -489,9 +493,14 @@ async function generatePptx(d) {
     s1.addImage({ data: BG_PHOTO_B64, x: 0, y: 0, w: W, h: H, sizing: { type: 'cover', w: W, h: H } });
     s1.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: W, h: H, fill: { color: '0B1220', transparency: 38 }, line: { type: 'none' } });
     s1.addText('F.00.00.00.00 Rev. 00', { x: 0.7, y: 0.4, w: 5, h: 0.3, fontSize: 10, color: 'D7DEE6', fontFace: 'Calibri', margin: 0 });
-    s1.addText('LAPORAN EVALUASI KINERJA EKSPEDISI', { x: 0.7, y: 2.5, w: 11.5, h: 0.5, fontSize: 16, color: MINT, bold: true, charSpacing: 3, fontFace: 'Calibri', margin: 0 });
-    s1.addText(d.ekspedisi, { x: 0.7, y: 3.0, w: 11.5, h: 1.2, fontSize: 54, color: WHITE, bold: true, fontFace: 'Cambria', margin: 0 });
-    s1.addText(`Periode  •  ${periodeLabel(d.periode)}`, { x: 0.7, y: 4.2, w: 11.5, h: 0.5, fontSize: 18, color: 'E8EDF2', fontFace: 'Calibri', margin: 0 });
+    s1.addText('LAPORAN EVALUASI KINERJA EKSPEDISI', { x: 0.7, y: 2.3, w: 11.5, h: 0.5, fontSize: 16, color: MINT, bold: true, charSpacing: 3, fontFace: 'Calibri', margin: 0 });
+    // Nama ekspedisi bisa sangat panjang (mis. "Sentosa Prima Abadi (SPA)")
+    // — kecilkan font & lebarkan area vertikal supaya tidak menabrak baris
+    // "Periode" di bawahnya kalau perlu wrap ke 2 baris.
+    const nameLen = String(d.ekspedisi).length;
+    const nameFontSize = nameLen > 30 ? 30 : nameLen > 22 ? 38 : nameLen > 14 ? 46 : 54;
+    s1.addText(d.ekspedisi, { x: 0.7, y: 2.8, w: 11.5, h: 1.6, fontSize: nameFontSize, color: WHITE, bold: true, fontFace: 'Cambria', margin: 0, valign: 'top' });
+    s1.addText(`Periode  •  ${periodeLabel(d.periode)}`, { x: 0.7, y: 4.75, w: 11.5, h: 0.5, fontSize: 18, color: 'E8EDF2', fontFace: 'Calibri', margin: 0 });
     s1.addShape(pres.shapes.OVAL, { x: 10.6, y: 5.15, w: 1.6, h: 1.6, fill: { color: gradeColor(r.grade) }, line: { color: WHITE, width: 2 } });
     s1.addText(r.grade || '-', { x: 10.6, y: 5.15, w: 1.6, h: 1.6, fontSize: 44, bold: true, color: NAVY, align: 'center', valign: 'middle', fontFace: 'Cambria', margin: 0 });
     s1.addText('GRADE', { x: 10.6, y: 6.85, w: 1.6, h: 0.3, fontSize: 11, color: 'E8EDF2', align: 'center', bold: true, charSpacing: 2, fontFace: 'Calibri', margin: 0 });
@@ -526,14 +535,20 @@ async function generatePptx(d) {
     s2.addTable(compRows, { x: 4.7, y: 1.6, w: 8.0, colW: [3.8, 1.3, 1.2, 1.7], fontSize: 13, fontFace: 'Calibri', color: NAVY,
       border: { pt: 0.75, color: 'E2E8F0' }, autoPage: false, rowH: 0.62, valign: 'middle' });
 
-    const compValues = [r.mutu.pct, r.fam.pct, r.distributor.pct, r.reliability.pct];
+    // PENTING: pptxgenjs akan menghasilkan file .pptx yang KORUP kalau ada
+    // nilai null/undefined di array angka utk chart. Kalau salah satu
+    // komponen tidak punya data (mis. FAM kosong utk ekspedisi tertentu),
+    // fallback ke 0 di sini (tabel tetap tampilkan "-" apa adanya).
+    const safe = (v) => (v == null || isNaN(v) ? 0 : v);
+    const compValues = [safe(r.mutu.pct), safe(r.fam.pct), safe(r.distributor.pct), safe(r.reliability.pct)];
     const compTargets = [r.mutu.target, r.fam.target, r.distributor.target, r.reliability.target];
+    const compAxisMin = Math.max(0, Math.min(...compValues, ...compTargets) - 10);
     s2.addChart(pres.charts.BAR, [{ name: 'Skor (%)', labels: ['Mutu', 'FAM', 'Distributor', 'Reliability'], values: compValues }], {
       x: 4.7, y: 4.75, w: 8.0, h: 2.35, barDir: 'col',
       chartColors: compValues.map((v, i) => scoreColor(v, compTargets[i])), varyColors: true,
       chartArea: { fill: { color: LIGHT }, roundedCorners: false },
       catAxisLabelColor: GREY, valAxisLabelColor: GREY, catAxisLabelFontSize: 10, valAxisLabelFontSize: 9,
-      valAxisMinVal: 80, valAxisMaxVal: 100, valGridLine: { color: 'E2E8F0', size: 0.5 }, catGridLine: { style: 'none' },
+      valAxisMinVal: compAxisMin, valAxisMaxVal: 100, valGridLine: { color: 'E2E8F0', size: 0.5 }, catGridLine: { style: 'none' },
       showValue: true, dataLabelPosition: 'outEnd', dataLabelColor: NAVY, dataLabelFontSize: 10, dataLabelFormatCode: '0.00"%"',
       showLegend: false, showTitle: false
     });
@@ -567,7 +582,8 @@ async function generatePptx(d) {
         border: { pt: 0.75, color: 'E2E8F0' }, autoPage: false, rowH: 0.55, valign: 'middle' });
 
       const chartLabels = rows.map(x => x.bulan);
-      const chartValues = rows.map(x => x.pct || 0);
+      const chartValues = rows.map(x => (x.pct == null || isNaN(x.pct)) ? 0 : x.pct);
+      const chartAxisMin = Math.max(0, Math.min(...chartValues, target) - 10);
       s.addChart([
         { type: pres.charts.BAR, data: [{ name: 'Pencapaian (%)', labels: chartLabels, values: chartValues }],
           options: { chartColors: chartValues.map(v => scoreColor(v, target)), varyColors: true } },
@@ -576,7 +592,7 @@ async function generatePptx(d) {
       ], {
         x: 6.7, y: 1.75, w: 6.0, h: 4.3, barDir: 'col', chartArea: { fill: { color: LIGHT }, roundedCorners: false },
         catAxisLabelColor: GREY, valAxisLabelColor: GREY, catAxisLabelFontSize: 10, valAxisLabelFontSize: 9,
-        valAxisMinVal: Math.max(0, target - 15), valAxisMaxVal: 100, valGridLine: { color: 'E2E8F0', size: 0.5 }, catGridLine: { style: 'none' },
+        valAxisMinVal: chartAxisMin, valAxisMaxVal: 100, valGridLine: { color: 'E2E8F0', size: 0.5 }, catGridLine: { style: 'none' },
         showValue: true, dataLabelPosition: 'outEnd', dataLabelColor: NAVY, dataLabelFontSize: 9, dataLabelFormatCode: '0.00"%"',
         showLegend: true, legendPos: 'b', legendFontSize: 9,
         showTitle: true, title: 'Tren Pencapaian per Bulan', titleColor: NAVY, titleFontSize: 13
