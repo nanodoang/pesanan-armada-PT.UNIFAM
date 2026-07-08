@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v43</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v45</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -301,6 +301,11 @@ function toNumber(str){
   return parseInt(s,10)||0;
 }
 function rupiah(n){ return 'Rp ' + (n||0).toLocaleString('id-ID'); }
+// truck kontainer (pakai harga di WA). Sisanya darat = tanpa harga
+function isKontainer(tipe){
+  const t=String(tipe||'').toLowerCase().replace(/\s+/g,'');
+  return t==='20ft' || t==='20ftc' || t==='40ft';
+}
 function fmtTgl(s){ if(!s) return '___'; return new Date(s+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
 // Rapikan tanggal apa pun (ISO penuh, dd-MMM-yy, dll) → "26 Jun 2026"
 // Rapikan jam (ISO penuh dari Sheets, atau "HH:MM") → "HH:MM"
@@ -503,17 +508,20 @@ function getRanking(tujuan, tipe){
   const full = norm(tujuan);
   const kota = extractKota(tujuan);
   const v = norm(mapTipe(tipe));
-  // versi tanpa spasi (biar "TANJUNGPINANG" == "Tanjung Pinang")
   const noSpace = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const kotaNS = noSpace(kota), fullNS = noSpace(tujuan);
-  // cocok kalau Description sheet == kota, atau saling mengandung (toleran, abaikan spasi)
+  // cocok berdasarkan KOTA (bagian setelah "-") di kedua sisi:
+  // jadi "PT. A - BALIKPAPAN" & "PT. B - BALIKPAPAN" dapat rate sama
   const destMatch = h => {
-    const d = norm(h.dest);
-    if(!d) return false;
-    if(d===kota || d===full || d.includes(kota) || kota.includes(d) || full.includes(d)) return true;
-    // bandingkan tanpa spasi/tanda baca
+    const dFull = norm(h.dest);
+    if(!dFull) return false;
+    const dKota = extractKota(h.dest);       // kota dari Description sheet
+    const dKotaNS = noSpace(dKota);
+    // 1) cocok kota vs kota (utama)
+    if(dKota && kota && (dKotaNS===kotaNS || dKotaNS.includes(kotaNS) || kotaNS.includes(dKotaNS))) return true;
+    // 2) fallback: cocok penuh / mengandung (toleran spasi)
+    if(dFull===kota || dFull===full || dFull.includes(kota) || kota.includes(dFull) || full.includes(dFull)) return true;
     const dNS = noSpace(h.dest);
-    if(!dNS) return false;
     return dNS===kotaNS || dNS===fullNS || dNS.includes(kotaNS) || kotaNS.includes(dNS) || fullNS.includes(dNS);
   };
   let list=hargaData.filter(h=>destMatch(h) && (!v || norm(h.vtype)===v));
@@ -1112,7 +1120,7 @@ function buildPesan(eksp){
   // item tunggal
   single.forEach(r=>{
     no++;
-    lines += no+'. '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+' — '+rupiah(r.pilihHarga)+'\n';
+    lines += no+'. '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
       const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
@@ -1136,13 +1144,16 @@ function buildPesan(eksp){
     const biayaDrop = g[0].biayaDrop || 0;
     const totalDrop = rateTertinggi + biayaDrop;
     const tujList = g.map(x=>x.tuj).join(' → ');
+    const kontainer = isKontainer(g[0].tipe);
     lines += no+'. 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
              '   🗓️ Muat: '+tglShow(g[0])+', jam '+(tampilJam(g[0].jam)||'-')+'\n'+
              '   🚛 '+g[0].tipe+'\n'+
              '   Rute: '+tujList+'\n'+
-             '   Rate tertinggi: '+rupiah(rateTertinggi)+'\n'+
-             '   Biaya drop: '+rupiah(biayaDrop)+'\n'+
-             '   *Total: '+rupiah(totalDrop)+'*\n';
+             (kontainer
+               ? ('   Rate tertinggi: '+rupiah(rateTertinggi)+'\n'+
+                  '   Biaya drop: '+rupiah(biayaDrop)+'\n'+
+                  '   *Total: '+rupiah(totalDrop)+'*\n')
+               : '');
 
     // cek non-rank1 untuk tiap tujuan dalam multidrop
     g.forEach(r=>{
