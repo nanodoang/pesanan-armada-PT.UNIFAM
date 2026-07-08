@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v45</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v46</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -496,6 +496,8 @@ function refreshPlanning(){
 // Ambil nama kota dari teks tujuan (mis. "PT. Borwita - MANADO" → "manado")
 function extractKota(tujuan){
   let s = String(tujuan||'');
+  // buang suffix dalam kurung, mis "(UF-C)"
+  s = s.replace(/\([^)]*\)/g,'').trim();
   // ambil bagian setelah tanda strip / en-dash terakhir
   const parts = s.split(/[-–—]/);
   let kota = parts.length>1 ? parts[parts.length-1] : s;
@@ -505,24 +507,16 @@ function extractKota(tujuan){
 // Cari semua ekspedisi untuk tujuan + tipe, urut termurah
 function getRanking(tujuan, tipe){
   if(!hargaData.length || !tujuan) return [];
-  const full = norm(tujuan);
   const kota = extractKota(tujuan);
   const v = norm(mapTipe(tipe));
   const noSpace = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const kotaNS = noSpace(kota), fullNS = noSpace(tujuan);
-  // cocok berdasarkan KOTA (bagian setelah "-") di kedua sisi:
-  // jadi "PT. A - BALIKPAPAN" & "PT. B - BALIKPAPAN" dapat rate sama
+  const kotaNS = noSpace(kota);
+  if(!kotaNS) return [];
+  // cocok KOTA vs KOTA, harus SAMA PERSIS (abaikan spasi/tanda baca)
+  // "PT. A - BALIKPAPAN" & "PT. B - BALIKPAPAN" → sama; kota beda → tidak tertukar
   const destMatch = h => {
-    const dFull = norm(h.dest);
-    if(!dFull) return false;
-    const dKota = extractKota(h.dest);       // kota dari Description sheet
-    const dKotaNS = noSpace(dKota);
-    // 1) cocok kota vs kota (utama)
-    if(dKota && kota && (dKotaNS===kotaNS || dKotaNS.includes(kotaNS) || kotaNS.includes(dKotaNS))) return true;
-    // 2) fallback: cocok penuh / mengandung (toleran spasi)
-    if(dFull===kota || dFull===full || dFull.includes(kota) || kota.includes(dFull) || full.includes(dFull)) return true;
-    const dNS = noSpace(h.dest);
-    return dNS===kotaNS || dNS===fullNS || dNS.includes(kotaNS) || kotaNS.includes(dNS) || fullNS.includes(dNS);
+    const dKotaNS = noSpace(extractKota(h.dest));
+    return dKotaNS && dKotaNS===kotaNS;
   };
   let list=hargaData.filter(h=>destMatch(h) && (!v || norm(h.vtype)===v));
   // dedup per ekspedisi (ambil termurah)
