@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History Order — PT. UNIFAM</title>
+<style>
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--amber:#B45309;--red:#B91C1C;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 14px 50px}
+.hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:15px 20px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.hdr a.back{background:rgba(255,255,255,.15);color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;flex-shrink:0}
+.hdr .ic{width:40px;height:40px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:21px}
+.hdr h1{font-size:17px;font-weight:800}
+.hdr p{font-size:11.5px;opacity:.85}
+.toolbar{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap}
+.search{flex:1;min-width:150px;padding:10px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:14px}
+input[type=date]{padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font-size:13px}
+.refresh{background:var(--navy);color:#fff;border:none;padding:10px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer}
+.count{font-size:12px;color:var(--muted);font-weight:600}
+.stat-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.stat{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.stat .n{font-size:20px;font-weight:800}
+.stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tbl-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:6px 4px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:920px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:800;padding:10px 10px;border-bottom:2px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--card)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.no-ord{font-family:monospace;font-size:11px;color:var(--navy-d);font-weight:700}
+.tuj{font-weight:700;max-width:200px}
+.eksp{display:inline-block;background:#E7F7F0;color:var(--teal);font-weight:700;font-size:10.5px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.b-ok{background:#DCFCE7;color:#15803D}
+.b-wait{background:#FEF3C7;color:#92400E}
+.b-no{background:#FEE2E2;color:#B91C1C}
+.mono{font-family:monospace;font-size:11.5px}
+.loading,.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+.foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <a href="planning.html" class="back">← Planning</a>
+    <div class="ic">📋</div>
+    <div>
+      <h1>History Order</h1>
+      <p>PT. UNIFAM — Semua order: dikirim, dikonfirmasi, tidak tersedia</p>
+    </div>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="Cari No Order / tujuan / ekspedisi / nopol / sopir…" oninput="render()">
+    <input type="date" id="dari" onchange="render()" title="Dari tanggal">
+    <input type="date" id="sampai" onchange="render()" title="Sampai tanggal">
+    <span class="count" id="count"></span>
+    <button class="refresh" onclick="muat()">↻ Refresh</button>
+  </div>
+
+  <div class="tbl-card">
+    <table>
+      <thead>
+        <tr>
+          <th>No Order</th><th>Tgl</th><th>Tujuan</th><th>Ekspedisi</th><th>Truck</th>
+          <th>Sopir</th><th>No Polisi</th><th>Kontainer</th><th>ETA</th><th>Harga</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="body"><tr><td colspan="11" class="loading">Memuat history…</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="foot">PT. UNIFAM · History semua order</p>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
+let DATA=[];
+
+function muat(){
+  document.getElementById('body').innerHTML='<tr><td colspan="11" class="loading">Memuat history…</td></tr>';
+  const cb='cbHist'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    DATA=(resp&&resp.items)?resp.items:[];
+    render();
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=gethistory&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; document.getElementById('body').innerHTML='<tr><td colspan="11" class="empty">Gagal memuat data</td></tr>'; };
+  document.body.appendChild(sc);
+}
+
+function parseTgl(s){
+  if(!s) return null;
+  s=String(s).trim();
+  // dd/mm/yyyy atau dd Mmm yyyy
+  let m=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+  const d=new Date(s); return isNaN(d)?null:d;
+}
+
+function render(){
+  const q=document.getElementById('search').value.toLowerCase().trim();
+  const dari=document.getElementById('dari').value?new Date(document.getElementById('dari').value):null;
+  const sampai=document.getElementById('sampai').value?new Date(document.getElementById('sampai').value):null;
+
+  let rows=DATA.filter(d=>{
+    if(q){
+      const blob=(d.no_order+' '+d.tuj+' '+d.ekspedisi+' '+d.nopol+' '+d.sopir+' '+d.tipe).toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    if(dari||sampai){
+      const t=parseTgl(d.tgl);
+      if(!t) return false;
+      if(dari && t<dari) return false;
+      if(sampai){ const s2=new Date(sampai); s2.setHours(23,59,59); if(t>s2) return false; }
+    }
+    return true;
+  });
+
+  document.getElementById('count').textContent=rows.length+' order';
+
+  // statistik
+  const total=rows.length;
+  const ok=rows.filter(d=>/tersedia|konfirmasi|sesuai/i.test(d.status)&&!/tidak/i.test(d.status)).length;
+  const wait=rows.filter(d=>/menunggu|belum/i.test(d.status)).length;
+  const no=rows.filter(d=>/tidak/i.test(d.status)).length;
+  document.getElementById('stat-row').innerHTML=`
+    <div class="stat"><div class="l">Total</div><div class="n" style="color:var(--navy)">${total}</div></div>
+    <div class="stat"><div class="l">Terkonfirmasi</div><div class="n" style="color:var(--teal)">${ok}</div></div>
+    <div class="stat"><div class="l">Menunggu</div><div class="n" style="color:var(--amber)">${wait}</div></div>
+    <div class="stat"><div class="l">Tidak Tersedia</div><div class="n" style="color:var(--red)">${no}</div></div>`;
+
+  if(!rows.length){
+    document.getElementById('body').innerHTML='<tr><td colspan="11" class="empty">Tidak ada order'+(q||dari||sampai?' yang cocok':'')+'</td></tr>';
+    return;
+  }
+
+  document.getElementById('body').innerHTML=rows.map(d=>{
+    let badge;
+    if(/tidak/i.test(d.status)) badge='<span class="badge b-no">❌ Tidak Tersedia</span>';
+    else if(/menunggu|belum/i.test(d.status)) badge='<span class="badge b-wait">⏳ Menunggu</span>';
+    else badge='<span class="badge b-ok">✓ '+esc(d.status||'Dikonfirmasi')+'</span>';
+    const harga = d.harga ? ('Rp '+Number(String(d.harga).replace(/[^\d]/g,'')||0).toLocaleString('id-ID')) : '-';
+    return `<tr>
+      <td class="no-ord">${esc(d.no_order)||'-'}</td>
+      <td style="white-space:nowrap">${esc(d.tgl)||'-'}</td>
+      <td class="tuj">${esc(d.tuj)||'-'}</td>
+      <td><span class="eksp">${esc(d.ekspedisi)||'-'}</span></td>
+      <td>${esc(d.tipe)||'-'}</td>
+      <td>${esc(d.sopir)||'-'}</td>
+      <td class="mono">${esc(d.nopol)||'-'}</td>
+      <td class="mono">${esc(d.kontainer)||'-'}</td>
+      <td style="white-space:nowrap">${esc(d.eta)||esc(d.est_tiba)||'-'}</td>
+      <td style="white-space:nowrap;font-weight:600">${harga}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+function esc(s){return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+muat();
+</script>
+</body>
+</html>
