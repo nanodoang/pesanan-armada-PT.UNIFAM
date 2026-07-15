@@ -106,7 +106,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 /* TABEL RATE */
 .table-scroll{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--r);background:#fff;-webkit-overflow-scrolling:touch}
 /* ==== MODE KARTU (HP) ==== */
-#card-wrap{display:none;flex-direction:column;gap:11px}
+#card-wrap{display:grid;grid-template-columns:1fr;gap:11px}
 .ocard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 13px}
 .ocard.sel{border-color:#A8E0C9}
 .ocard.drop{border-color:#0C447C;background:#F7FAFF}
@@ -135,9 +135,13 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .oc-more{text-align:center;padding:6px 0 0;font-size:10px;color:var(--navy);font-weight:700;cursor:pointer}
 .oc-na{font-size:11px;color:var(--text3);text-align:center;padding:8px}
 .oc-drop-panel{margin-top:10px;padding:9px;background:#EEF6FF;border-radius:8px;font-size:11px}
-@media(max-width:900px){
-  #tbl-wrap{display:none}
-  #card-wrap{display:flex}
+#tbl-wrap{display:none}
+/* layar lebar: kartu jadi 2 kolom biar tidak memanjang */
+@media(min-width:1000px){
+  #card-wrap{grid-template-columns:1fr 1fr;gap:12px}
+}
+@media(min-width:1500px){
+  #card-wrap{grid-template-columns:1fr 1fr 1fr}
 }
 .rate-tbl{border-collapse:collapse;font-size:12px;min-width:100%;white-space:nowrap}
 .rate-tbl th,.rate-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);border-right:1px solid #EEF2F7;text-align:left;vertical-align:middle}
@@ -177,7 +181,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v52</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v53</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>

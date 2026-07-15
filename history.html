@@ -23,10 +23,10 @@ input[type=date]{padding:9px 11px;border:1.5px solid var(--line);border-radius:9
 .stat{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
 .stat .n{font-size:20px;font-weight:800}
 .stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.tbl-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:6px 4px;overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:920px}
-th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:800;padding:10px 10px;border-bottom:2px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--card)}
-td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:0;overflow:auto;max-height:70vh}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:1000px}
+thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:#fff;font-weight:800;padding:11px 10px;white-space:nowrap;position:sticky;top:0;background:var(--navy);z-index:10}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;background:var(--card)}
 tr:last-child td{border-bottom:none}
 .no-ord{font-family:monospace;font-size:11px;color:var(--navy-d);font-weight:700}
 .tuj{font-weight:700;max-width:200px}
@@ -54,7 +54,7 @@ tr:last-child td{border-bottom:none}
   <div class="stat-row" id="stat-row"></div>
 
   <div class="toolbar">
-    <input class="search" id="search" placeholder="Cari No Order / tujuan / ekspedisi / nopol / sopir…" oninput="render()">
+    <input class="search" id="search" placeholder="Cari No Order / tujuan / ekspedisi / nopol / sopir / no HP…" oninput="render()">
     <input type="date" id="dari" onchange="render()" title="Dari tanggal">
     <input type="date" id="sampai" onchange="render()" title="Sampai tanggal">
     <span class="count" id="count"></span>
@@ -66,10 +66,10 @@ tr:last-child td{border-bottom:none}
       <thead>
         <tr>
           <th>No Order</th><th>Tgl</th><th>Tujuan</th><th>Ekspedisi</th><th>Truck</th>
-          <th>Sopir</th><th>No Polisi</th><th>Kontainer</th><th>ETA</th><th>Harga</th><th>Status</th>
+          <th>Sopir</th><th>No HP</th><th>No Polisi</th><th>Kontainer</th><th>ETA</th><th>Harga</th><th>Status</th>
         </tr>
       </thead>
-      <tbody id="body"><tr><td colspan="11" class="loading">Memuat history…</td></tr></tbody>
+      <tbody id="body"><tr><td colspan="12" class="loading">Memuat history…</td></tr></tbody>
     </table>
   </div>
 
@@ -81,7 +81,7 @@ const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2
 let DATA=[];
 
 function muat(){
-  document.getElementById('body').innerHTML='<tr><td colspan="11" class="loading">Memuat history…</td></tr>';
+  document.getElementById('body').innerHTML='<tr><td colspan="12" class="loading">Memuat history…</td></tr>';
   const cb='cbHist'+Date.now();
   window[cb]=function(resp){
     delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
@@ -90,7 +90,7 @@ function muat(){
   };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?action=gethistory&callback='+cb;
-  sc.onerror=function(){ delete window[cb]; document.getElementById('body').innerHTML='<tr><td colspan="11" class="empty">Gagal memuat data</td></tr>'; };
+  sc.onerror=function(){ delete window[cb]; document.getElementById('body').innerHTML='<tr><td colspan="12" class="empty">Gagal memuat data</td></tr>'; };
   document.body.appendChild(sc);
 }
 
@@ -110,7 +110,7 @@ function render(){
 
   let rows=DATA.filter(d=>{
     if(q){
-      const blob=(d.no_order+' '+d.tuj+' '+d.ekspedisi+' '+d.nopol+' '+d.sopir+' '+d.tipe).toLowerCase();
+      const blob=(d.no_order+' '+d.tuj+' '+d.ekspedisi+' '+d.nopol+' '+d.sopir+' '+d.hp+' '+d.tipe).toLowerCase();
       if(!blob.includes(q)) return false;
     }
     if(dari||sampai){
@@ -136,7 +136,7 @@ function render(){
     <div class="stat"><div class="l">Tidak Tersedia</div><div class="n" style="color:var(--red)">${no}</div></div>`;
 
   if(!rows.length){
-    document.getElementById('body').innerHTML='<tr><td colspan="11" class="empty">Tidak ada order'+(q||dari||sampai?' yang cocok':'')+'</td></tr>';
+    document.getElementById('body').innerHTML='<tr><td colspan="12" class="empty">Tidak ada order'+(q||dari||sampai?' yang cocok':'')+'</td></tr>';
     return;
   }
 
@@ -153,6 +153,7 @@ function render(){
       <td><span class="eksp">${esc(d.ekspedisi)||'-'}</span></td>
       <td>${esc(d.tipe)||'-'}</td>
       <td>${esc(d.sopir)||'-'}</td>
+      <td class="mono">${d.hp?('<a href="https://wa.me/'+String(d.hp).replace(/[^0-9]/g,'').replace(/^0/,'62')+'" target="_blank" style="color:#1D9E75;text-decoration:none;font-weight:700">'+esc(d.hp)+'</a>'):'-'}</td>
       <td class="mono">${esc(d.nopol)||'-'}</td>
       <td class="mono">${esc(d.kontainer)||'-'}</td>
       <td style="white-space:nowrap">${esc(d.eta)||esc(d.est_tiba)||'-'}</td>
