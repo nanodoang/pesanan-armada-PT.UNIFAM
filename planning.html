@@ -104,7 +104,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .import-hint{font-size:11px;color:var(--text3);margin-top:8px;text-align:center}
 
 /* TABEL RATE */
-.table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:#fff;-webkit-overflow-scrolling:touch}
+.table-scroll{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--r);background:#fff;-webkit-overflow-scrolling:touch}
 /* ==== MODE KARTU (HP) ==== */
 #card-wrap{display:none;flex-direction:column;gap:11px}
 .ocard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 13px}
@@ -141,7 +141,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 }
 .rate-tbl{border-collapse:collapse;font-size:12px;min-width:100%;white-space:nowrap}
 .rate-tbl th,.rate-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);border-right:1px solid #EEF2F7;text-align:left;vertical-align:middle}
-.rate-tbl thead th{background:var(--navy);color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
+.rate-tbl thead th{background:var(--navy);color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;z-index:5}
 .rate-tbl thead .grp1{background:#B45309}
 .rate-tbl thead .grp2{background:#1E6FA8}
 .rate-tbl tbody tr:nth-child(even){background:#F8FAFC}
@@ -177,7 +177,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v49</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v52</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -355,33 +355,59 @@ function toast(msg,type){
 }
 
 // ============ LOAD DATA ============
+function prosesRate(rws){
+  if(!rws || !rws.length){ setHargaStatus('⚠️ Data rate kosong'); return false; }
+  const head=rws[0].map(h=>norm(h));
+  const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
+  const iV=idx(['vehicle']), iD=idx(['description','tujuan']), iP=idx(['price','harga']), iE=idx(['expedition','ekspedisi']), iK=idx(['kontak','no wa','whatsapp','no hp']);
+  hargaData=rws.slice(1).filter(r=>r.length>1).map(r=>({
+    expedition: cleanTxt(iE>=0?r[iE]:''),
+    dest: cleanTxt(r[iD]||''),
+    vtype: cleanTxt(r[iV]||''),
+    price: toNumber(r[iP]),
+    kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
+  })).filter(r=>r.dest && r.price>0);
+  setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat') : '⚠️ Tidak ada rate valid');
+  renderRanks();
+  return hargaData.length>0;
+}
+
 function loadHarga(tries){
   tries = tries||0;
   setHargaStatus('Memuat data rate…'+(tries?(' (percobaan '+(tries+1)+')'):''));
+  // 1) coba lewat GAS (JSONP) dulu — tahan blokir jaringan kantor & CORS
+  const cb='cbRate'+Date.now();
+  let selesai=false;
+  const to=setTimeout(()=>{ if(!selesai){ selesai=true; loadHargaFetch(tries); } }, 6000);
+  window[cb]=function(resp){
+    if(selesai) return; selesai=true; clearTimeout(to);
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok' && resp.rows && resp.rows.length){
+      prosesRate(resp.rows);
+    }else{
+      loadHargaFetch(tries);
+    }
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getrate&callback='+cb;
+  sc.onerror=function(){ if(selesai) return; selesai=true; clearTimeout(to); delete window[cb]; loadHargaFetch(tries); };
+  document.body.appendChild(sc);
+}
+
+// fallback: fetch CSV langsung (kalau GAS gagal)
+function loadHargaFetch(tries){
+  tries = tries||0;
   fetch(HARGA_CSV).then(r=>{
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.text();
   }).then(txt=>{
-    const rws=parseCSV(txt);
-    if(!rws.length){ setHargaStatus('⚠️ Data rate kosong'); return; }
-    const head=rws[0].map(h=>norm(h));
-    const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
-    const iV=idx(['vehicle']), iD=idx(['description','tujuan']), iP=idx(['price','harga']), iE=idx(['expedition','ekspedisi']), iK=idx(['kontak','no wa','whatsapp','no hp']);
-    hargaData=rws.slice(1).filter(r=>r.length>1).map(r=>({
-      expedition: cleanTxt(iE>=0?r[iE]:''),
-      dest: cleanTxt(r[iD]||''),
-      vtype: cleanTxt(r[iV]||''),
-      price: toNumber(r[iP]),
-      kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
-    })).filter(r=>r.dest && r.price>0);
-    setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat') : '⚠️ Tidak ada rate valid');
-    renderRanks();
+    prosesRate(parseCSV(txt));
   }).catch(e=>{
     console.warn('harga',e);
-    if(tries < 3){
-      setTimeout(()=>loadHarga(tries+1), 1200); // coba ulang
+    if(tries < 2){
+      setTimeout(()=>loadHargaFetch(tries+1), 1200);
     }else{
-      setHargaStatus('⚠️ Gagal: '+(e.message||'fetch')+' — ketuk coba lagi');
+      setHargaStatus('⚠️ Gagal muat rate — ketuk coba lagi');
       const el=document.getElementById('harga-status');
       if(el){ el.style.cursor='pointer'; el.onclick=()=>loadHarga(0); }
       const fb=document.getElementById('rate-fallback'); if(fb) fb.style.display='block';
@@ -401,28 +427,44 @@ function muatRateManual(){
   loadHarga(0);
 }
 let seqMap = {}; // norm(delivery name) -> {seq: angka, waktu: 'pagi'/'siang', raw}
+function prosesMaster(rws){
+  if(!rws || !rws.length) return;
+  const head=rws[0].map(h=>norm(h));
+  let iN=head.findIndex(h=>h.includes('delivery')||h.includes('distributor')||h.includes('dist name')||h.includes('nama'));
+  let iS=head.findIndex(h=>h.includes('seq'));
+  if(iN<0)iN=0; if(iS<0)iS=1;
+  seqMap={};
+  rws.slice(1).forEach(r=>{
+    const nama=cleanTxt(r[iN]||'');
+    const seqRaw=cleanTxt(r[iS]||'');
+    if(!nama) return;
+    const mAngka=seqRaw.match(/(\d+)/);
+    const seq=mAngka?parseInt(mAngka[1],10):999;
+    const waktu=/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':'');
+    seqMap[norm(nama)]={seq:seq, waktu:waktu, raw:seqRaw};
+  });
+  hitungJamMuat();
+}
 function loadDist(){
+  // coba GAS dulu (tahan blokir jaringan), fallback fetch langsung
+  const cb='cbMaster'+Date.now();
+  let selesai=false;
+  const to=setTimeout(()=>{ if(!selesai){ selesai=true; loadDistFetch(); } }, 6000);
+  window[cb]=function(resp){
+    if(selesai) return; selesai=true; clearTimeout(to);
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok' && resp.rows && resp.rows.length){ prosesMaster(resp.rows); }
+    else { loadDistFetch(); }
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getmaster&callback='+cb;
+  sc.onerror=function(){ if(selesai) return; selesai=true; clearTimeout(to); delete window[cb]; loadDistFetch(); };
+  document.body.appendChild(sc);
+}
+function loadDistFetch(){
   if(!MASTER_DIST_CSV || MASTER_DIST_CSV.indexOf('PASTE_LINK')===0) return;
   fetch(MASTER_DIST_CSV).then(r=>r.text()).then(txt=>{
-    const rws=parseCSV(txt);
-    if(!rws.length) return;
-    const head=rws[0].map(h=>norm(h));
-    let iN=head.findIndex(h=>h.includes('delivery')||h.includes('distributor')||h.includes('dist name')||h.includes('nama'));
-    let iS=head.findIndex(h=>h.includes('seq'));
-    if(iN<0)iN=0; if(iS<0)iS=1;
-    seqMap={};
-    rws.slice(1).forEach(r=>{
-      const nama=cleanTxt(r[iN]||'');
-      const seqRaw=cleanTxt(r[iS]||'');
-      if(!nama) return;
-      // ekstrak angka & waktu dari "Seq 2 - Siang"
-      const mAngka=seqRaw.match(/(\d+)/);
-      const seq=mAngka?parseInt(mAngka[1],10):999;
-      const waktu=/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':'');
-      seqMap[norm(nama)]={seq:seq, waktu:waktu, raw:seqRaw};
-    });
-    // setelah master siap, hitung jam muat
-    hitungJamMuat();
+    prosesMaster(parseCSV(txt));
   }).catch(e=>console.warn('master dist',e));
 }
 
@@ -833,6 +875,50 @@ function pisahMultidrop(gid){
   renderRows();
 }
 
+// ===== MULTI LEG (darat + laut, 1 tujuan 2 ekspedisi) =====
+const PELABUHAN_LIST = ['SURABAYA'];
+function toggleMultiLeg(id, on){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  r.multiLeg = !!on;
+  if(on){
+    if(!r.pelabuhan) r.pelabuhan = PELABUHAN_LIST[0];
+    // leg2 (laut) mewarisi pilihan lama kalau ada
+    if(!r.tipe2) r.tipe2='';
+    if(!r.eksp2){ r.eksp2=''; r.harga2=0; }
+  }else{
+    r.pelabuhan=''; r.tipe2=''; r.eksp2=''; r.harga2=0;
+  }
+  if(r.isDraft) updateDraftField(r,'multiLeg');
+  renderRows();
+}
+function setPelabuhan(id,val){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  r.pelabuhan=val; r.pilihEksp=''; r.pilihHarga=0; // rate darat berubah
+  renderRows();
+}
+function setTipeLeg(id,leg,val){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  if(leg===1){ r.tipe=val; r.pilihEksp=''; r.pilihHarga=0; }
+  else { r.tipe2=val; r.eksp2=''; r.harga2=0; }
+  renderRows();
+}
+function pilihEkspLeg(id,leg,eksp,price){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  if(leg===1){ r.pilihEksp=eksp; r.pilihHarga=price; }
+  else { r.eksp2=eksp; r.harga2=price; }
+  if(r.isDraft){ updateDraftField(r,'pilihEksp'); updateDraftField(r,'pilihHarga'); }
+  renderRows();
+}
+// total multi leg = rate darat + rate laut
+function totalMultiLeg(r){
+  return (r.pilihHarga||0) + (r.harga2||0);
+}
+// ranking untuk leg darat (ke pelabuhan) / leg laut (ke tujuan akhir)
+function rankingLeg(r, leg){
+  if(leg===1) return (r.pelabuhan && r.tipe) ? getRanking(r.pelabuhan, r.tipe) : [];
+  return (r.tuj && r.tipe2) ? getRanking(r.tuj, r.tipe2) : [];
+}
+
 // ===== Draft order tersimpan di Google Sheet (multi-admin) =====
 // helper kirim ke GAS via JSONP
 function gasJSONP(params, onResp){
@@ -861,13 +947,33 @@ function renderRows(){
 
 // ==== MODE KARTU (HP) ====
 let expandRate={}; // id -> true kalau tampil semua rate
+// bangun grid rate 2x2 untuk 1 leg
+function gridRate(r, leg, rank, pilihNow){
+  if(!rank.length) return '<div class="oc-na">Rate tidak ditemukan</div>';
+  const tampil = expandRate[r.id+'_'+leg] ? rank.length : Math.min(4, rank.length);
+  let cells='';
+  for(let k=0;k<tampil;k++){
+    const h=rank[k];
+    const on = norm(pilihNow)===norm(h.expedition);
+    const eksp=(h.expedition||'-').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    cells+=`<div class="oc-rk ${k===0?'r1':''} ${on?'on':''}" onclick="pilihEkspLeg(${r.id},${leg},&quot;${eksp}&quot;,${h.price})">
+      <div class="oc-rk-top"><span class="oc-rk-num">${on?'✓':('R'+(k+1))}</span><span class="oc-rk-eksp">${h.expedition||'-'}</span></div>
+      <div class="oc-rk-rate">${rupiah(h.price)}</div>
+    </div>`;
+  }
+  let out='<div class="oc-grid">'+cells+'</div>';
+  if(rank.length>4){
+    out+=`<div class="oc-more" onclick="toggleRate('${r.id}_${leg}')">${expandRate[r.id+'_'+leg]?'▲ tampilkan 4 saja':('+ '+(rank.length-4)+' ekspedisi lainnya ▾')}</div>`;
+  }
+  return out;
+}
+
 function renderCards(){
   const wrap=document.getElementById('card-wrap');
   if(!wrap) return;
   if(!rows.length){ wrap.innerHTML=''; return; }
   let html='';
   rows.forEach((r,i)=>{
-    const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     const st = r.status || 'Baru';
     let badge, cls='ocard';
     if(st==='Belum') badge='<span class="oc-badge st-belum">⏳ Belum</span>';
@@ -875,33 +981,47 @@ function renderCards(){
     else badge='<span class="oc-badge st-baru">🆕 Baru</span>';
     if(r.pilihEksp) cls+=' sel';
     if(r.dropGroup) cls+=' drop';
+    if(r.multiLeg){ cls+=' mleg'; badge+=' <span class="oc-badge" style="background:#EDE9FE;color:#5B21B6">🔗 Multi Leg</span>'; }
     const checked = checkedIds.has(r.id) ? 'checked' : '';
     const kartonInfo = r.total ? (' · '+r.total+' krt') : (r.kubik?(' · '+r.kubik+' m³'):'');
     const jamInfo = tampilJam(r.jam) ? (', '+tampilJam(r.jam)) : '';
     const metaTgl = (r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText));
 
-    // rate grid
+    // ==== BAGIAN RATE ====
     let rateHtml='';
-    if(!r.tipe){
-      rateHtml='<div class="oc-na">Pilih truck dulu untuk lihat rate</div>';
-    }else if(!rank.length){
-      rateHtml='<div class="oc-na">Rate tidak ditemukan</div>';
+    if(r.multiLeg){
+      // LEG 1 (darat → pelabuhan) + LEG 2 (laut → tujuan akhir)
+      const rank1=rankingLeg(r,1), rank2=rankingLeg(r,2);
+      const opsiPel=PELABUHAN_LIST.map(p=>`<option value="${p}" ${r.pelabuhan===p?'selected':''}>${p}</option>`).join('');
+      rateHtml=`
+      <div style="background:#FFF8F0;border:1px solid #FCD9A8;border-radius:8px;padding:9px;margin-bottom:7px">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px;flex-wrap:wrap">
+          <span style="font-size:8px;background:#B45309;color:#fff;padding:2px 7px;border-radius:9px;font-weight:800">LEG 1 · DARAT</span>
+          <select onchange="setPelabuhan(${r.id},this.value)" style="font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:5px">${opsiPel}</select>
+        </div>
+        <div class="oc-row2" style="margin-bottom:7px">
+          <div><div class="oc-lbl">Truck darat</div><select class="truck-sel" onchange="setTipeLeg(${r.id},1,this.value)">${truckOptions(r.tipe)}</select></div>
+        </div>
+        ${r.tipe ? gridRate(r,1,rank1,r.pilihEksp) : '<div class="oc-na">Pilih truck darat dulu</div>'}
+      </div>
+      <div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:9px;margin-bottom:7px">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:7px">
+          <span style="font-size:8px;background:#0EA5E9;color:#fff;padding:2px 7px;border-radius:9px;font-weight:800">LEG 2 · LAUT</span>
+          <span style="font-size:9px;color:var(--text3)">→ ${r.tuj||'-'}</span>
+        </div>
+        <div class="oc-row2" style="margin-bottom:7px">
+          <div><div class="oc-lbl">Kontainer</div><select class="truck-sel" onchange="setTipeLeg(${r.id},2,this.value)">${truckOptions(r.tipe2)}</select></div>
+        </div>
+        ${r.tipe2 ? gridRate(r,2,rank2,r.eksp2) : '<div class="oc-na">Pilih kontainer dulu</div>'}
+      </div>
+      <div style="background:#EDE9FE;border:1px solid #DDD6FE;border-radius:7px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:10.5px;color:#5B21B6;font-weight:700">Total (darat + laut)</span>
+        <span style="font-size:13px;font-weight:800;color:#5B21B6">${rupiah(totalMultiLeg(r))}</span>
+      </div>`;
     }else{
-      const tampil = expandRate[r.id] ? rank.length : Math.min(4, rank.length);
-      let cells='';
-      for(let k=0;k<tampil;k++){
-        const h=rank[k];
-        const on = norm(r.pilihEksp)===norm(h.expedition);
-        const eksp=(h.expedition||'-').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-        cells+=`<div class="oc-rk ${k===0?'r1':''} ${on?'on':''}" onclick="pilihEksp(${r.id},&quot;${eksp}&quot;,${h.price})">
-          <div class="oc-rk-top"><span class="oc-rk-num">${on?'✓':('R'+(k+1))}</span><span class="oc-rk-eksp">${h.expedition||'-'}</span></div>
-          <div class="oc-rk-rate">${rupiah(h.price)}</div>
-        </div>`;
-      }
-      rateHtml='<div class="oc-grid">'+cells+'</div>';
-      if(rank.length>4){
-        rateHtml+=`<div class="oc-more" onclick="toggleRate(${r.id})">${expandRate[r.id]?'▲ tampilkan 4 saja':('+ '+(rank.length-4)+' ekspedisi lainnya ▾')}</div>`;
-      }
+      const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
+      if(!r.tipe) rateHtml='<div class="oc-na">Pilih truck dulu untuk lihat rate</div>';
+      else rateHtml=gridRate(r,1,rank,r.pilihEksp);
     }
 
     // panel multidrop (baris pertama grup)
@@ -932,18 +1052,23 @@ function renderCards(){
         ${badge}
         <button class="btn-hapus" onclick="delRow(${r.id})" style="flex-shrink:0">🗑️</button>
       </div>
-      <div class="oc-row2">
+      <div class="oc-row2" style="${r.multiLeg?'display:none':''}">
         <div><div class="oc-lbl">Truck</div><select class="truck-sel" onchange="setTipe(${r.id},this.value)">${truckOptions(r.tipe)}</select></div>
         <div><div class="oc-lbl">Jam Muat</div><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></div>
       </div>
-      <div class="oc-rate-lbl">Pilih ekspedisi · urut termurah:</div>
-      ${rateHtml}
+      ${r.multiLeg?`<div class="oc-row2"><div><div class="oc-lbl">Jam Muat</div><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></div></div>`:''}
+      <label style="display:flex;align-items:center;gap:7px;background:${r.multiLeg?'#F5F3FF':'#FAFBFC'};border:1px solid ${r.multiLeg?'#DDD6FE':'var(--border)'};border-radius:7px;padding:7px 9px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" ${r.multiLeg?'checked':''} onchange="toggleMultiLeg(${r.id},this.checked)" style="width:15px;height:15px">
+        <span style="font-size:11px;font-weight:700;color:${r.multiLeg?'#5B21B6':'var(--text3)'}">🔗 Multi Leg (darat + laut)</span>
+      </label>
+      ${r.multiLeg ? rateHtml : (`<div class="oc-rate-lbl">Pilih ekspedisi · urut termurah:</div>${rateHtml}`)}
       ${dropPanel}
     </div>`;
   });
   wrap.innerHTML=html;
 }
 function toggleRate(id){ expandRate[id]=!expandRate[id]; renderCards(); }
+
 
 // Tabel perbandingan rate dengan Rank 1-4 + tombol klik
 function renderTable(){
