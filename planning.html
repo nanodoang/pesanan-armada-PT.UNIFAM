@@ -106,7 +106,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 /* TABEL RATE */
 .table-scroll{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--r);background:#fff;-webkit-overflow-scrolling:touch}
 /* ==== MODE KARTU (HP) ==== */
-#card-wrap{display:grid;grid-template-columns:1fr;gap:11px}
+#card-wrap{display:none;grid-template-columns:1fr;gap:11px}
 .ocard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 13px}
 .ocard.sel{border-color:#A8E0C9}
 .ocard.drop{border-color:#0C447C;background:#F7FAFF}
@@ -135,13 +135,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .oc-more{text-align:center;padding:6px 0 0;font-size:10px;color:var(--navy);font-weight:700;cursor:pointer}
 .oc-na{font-size:11px;color:var(--text3);text-align:center;padding:8px}
 .oc-drop-panel{margin-top:10px;padding:9px;background:#EEF6FF;border-radius:8px;font-size:11px}
-#tbl-wrap{display:none}
-/* layar lebar: kartu jadi 2 kolom biar tidak memanjang */
-@media(min-width:1000px){
-  #card-wrap{grid-template-columns:1fr 1fr;gap:12px}
-}
-@media(min-width:1500px){
-  #card-wrap{grid-template-columns:1fr 1fr 1fr}
+/* HP = kartu, komputer = tabel */
+@media(max-width:900px){
+  #tbl-wrap{display:none}
+  #card-wrap{display:grid}
 }
 .rate-tbl{border-collapse:collapse;font-size:12px;min-width:100%;white-space:nowrap}
 .rate-tbl th,.rate-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);border-right:1px solid #EEF2F7;text-align:left;vertical-align:middle}
@@ -181,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v53</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v54</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1080,7 +1077,7 @@ function renderTable(){
   if(!tbl) return;
   // Header
   let head='<thead><tr>'+
-    '<th>✓</th><th>No</th><th>Hapus</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>Truck</th>'+
+    '<th>✓</th><th>No</th><th>Hapus</th><th>Status</th><th>Tanggal</th><th>Jam Muat</th><th>Destination</th><th>Kubikasi</th><th>🔗 Leg</th><th>Truck</th>'+
     '<th class="grp1">EXP</th><th class="grp1">Rate</th><th>Rank</th>';
   for(let k=1;k<=4;k++){
     head+=`<th class="grp2">Rank ${k}</th><th class="grp2">Rate</th><th class="grp2"></th>`;
@@ -1134,6 +1131,75 @@ function renderTable(){
       }
     }
     const checked = checkedIds.has(r.id) ? 'checked' : '';
+    if(r.multiLeg) rowClass += ' row-mleg';
+    // kolom centang multi leg
+    const legCell = `<td style="text-align:center">
+      <input type="checkbox" ${r.multiLeg?'checked':''} onchange="toggleMultiLeg(${r.id},this.checked)" title="Multi Leg (darat+laut)">
+      ${r.multiLeg?('<div style="font-size:8px;color:#5B21B6;font-weight:800;margin-top:2px">DARAT</div>'):''}
+    </td>`;
+
+    if(r.multiLeg){
+      // ===== BARIS 1: LEG DARAT (ke pelabuhan) =====
+      const rank1 = rankingLeg(r,1);
+      const opsiPel = PELABUHAN_LIST.map(p=>`<option value="${p}" ${r.pelabuhan===p?'selected':''}>${p}</option>`).join('');
+      const exp1 = r.pilihEksp
+        ? `<td class="cell-exp">${r.pilihEksp}</td><td class="cell-rate">${rupiah(r.pilihHarga)}</td>`
+        : `<td class="cell-exp empty">— pilih —</td><td class="cell-rate empty">—</td>`;
+      let rc1='';
+      for(let k=0;k<4;k++){
+        const h=rank1[k];
+        if(h){
+          const on = norm(r.pilihEksp)===norm(h.expedition);
+          const e=(h.expedition||'-').replace(/"/g,'&quot;');
+          rc1+=`<td class="rank-eksp">${h.expedition||'-'}</td><td class="rank-rate">${rupiah(h.price)}</td>`+
+               `<td><button class="btn-klik ${on?'on':''}" onclick="pilihEkspLeg(${r.id},1,&quot;${e}&quot;,${h.price})">${on?'✓':'klik'}</button></td>`;
+        }else rc1+=`<td class="tbl-na">-</td><td class="tbl-na">-</td><td></td>`;
+      }
+      body+=`<tr class="${rowClass}" style="background:#FFF8F0">
+        <td><input type="checkbox" class="row-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)"></td>
+        <td class="tbl-rownum">${i+1}</td>
+        <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
+        <td>${badge}${dropBadge}</td>
+        <td>${r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText)}</td>
+        <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
+        <td class="cell-dest">${dest}<br><span style="font-size:9px;color:#B45309;font-weight:800">LEG 1 → </span><select onchange="setPelabuhan(${r.id},this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">${opsiPel}</select></td>
+        <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
+        ${legCell}
+        <td><select class="truck-sel" onchange="setTipeLeg(${r.id},1,this.value)">${truckOptions(r.tipe)}</select></td>
+        ${exp1}
+        <td class="tbl-rownum">${rank1.length||'-'}</td>
+        ${rc1}
+      </tr>`;
+      // ===== BARIS 2: LEG LAUT (ke tujuan akhir) =====
+      const rank2 = rankingLeg(r,2);
+      const exp2 = r.eksp2
+        ? `<td class="cell-exp">${r.eksp2}</td><td class="cell-rate">${rupiah(r.harga2)}</td>`
+        : `<td class="cell-exp empty">— pilih —</td><td class="cell-rate empty">—</td>`;
+      let rc2='';
+      for(let k=0;k<4;k++){
+        const h=rank2[k];
+        if(h){
+          const on = norm(r.eksp2)===norm(h.expedition);
+          const e=(h.expedition||'-').replace(/"/g,'&quot;');
+          rc2+=`<td class="rank-eksp">${h.expedition||'-'}</td><td class="rank-rate">${rupiah(h.price)}</td>`+
+               `<td><button class="btn-klik ${on?'on':''}" onclick="pilihEkspLeg(${r.id},2,&quot;${e}&quot;,${h.price})">${on?'✓':'klik'}</button></td>`;
+        }else rc2+=`<td class="tbl-na">-</td><td class="tbl-na">-</td><td></td>`;
+      }
+      body+=`<tr class="${rowClass}" style="background:#F0F9FF">
+        <td></td><td></td><td></td>
+        <td><span style="font-size:9px;background:#EDE9FE;color:#5B21B6;padding:2px 6px;border-radius:9px;font-weight:800">TOTAL ${rupiah(totalMultiLeg(r))}</span></td>
+        <td></td><td></td>
+        <td class="cell-dest"><span style="font-size:9px;color:#0EA5E9;font-weight:800">LEG 2 → ${r.tuj||'-'}</span></td>
+        <td></td>
+        <td style="text-align:center"><div style="font-size:8px;color:#0EA5E9;font-weight:800">LAUT</div></td>
+        <td><select class="truck-sel" onchange="setTipeLeg(${r.id},2,this.value)">${truckOptions(r.tipe2)}</select></td>
+        ${exp2}
+        <td class="tbl-rownum">${rank2.length||'-'}</td>
+        ${rc2}
+      </tr>`;
+      return;
+    }
+
     body+=`<tr class="${rowClass}">
       <td><input type="checkbox" class="row-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)"></td>
       <td class="tbl-rownum">${i+1}</td>
@@ -1143,6 +1209,7 @@ function renderTable(){
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
       <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
+      ${legCell}
       <td><select class="truck-sel" onchange="setTipe(${r.id},this.value)">${truckOptions(r.tipe)}</select></td>
       ${expCell}
       <td class="tbl-rownum">${rank.length||'-'}</td>
