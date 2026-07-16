@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v57</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v58</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -360,11 +360,21 @@ function prosesRate(rws){
   if(!rws || !rws.length){ setHargaStatus('⚠️ Data rate kosong'); return false; }
   const head=rws[0].map(h=>norm(h));
   const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
-  const iV=idx(['vehicle']), iD=idx(['description','tujuan']), iP=idx(['price','harga']), iE=idx(['expedition','ekspedisi']), iK=idx(['kontak','no wa','whatsapp','no hp']);
+  const iV=idx(['vehicle','tipe','jenis']);
+  // kolom tujuan: Description / Delivery Name / Tujuan / Kota
+  let iD=idx(['description','tujuan','kota','city']);
+  if(iD<0) iD=idx(['delivery','dist']);
+  const iP=idx(['price','harga','rate']);
+  const iE=idx(['expedition','ekspedisi','vendor']);
+  const iK=idx(['kontak','no wa','whatsapp','no hp']);
+  if(iD<0 || iP<0){
+    setHargaStatus('⚠️ Kolom rate tak dikenal: '+head.join(' | '));
+    return false;
+  }
   hargaData=rws.slice(1).filter(r=>r.length>1).map(r=>({
     expedition: cleanTxt(iE>=0?r[iE]:''),
     dest: cleanTxt(r[iD]||''),
-    vtype: cleanTxt(r[iV]||''),
+    vtype: cleanTxt(iV>=0?r[iV]:''),
     price: toNumber(r[iP]),
     kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
   })).filter(r=>r.dest && r.price>0);
@@ -562,7 +572,16 @@ function getRanking(tujuan, tipe){
     const dKotaNS = noSpace(extractKota(h.dest));
     return dKotaNS && dKotaNS===kotaNS;
   };
-  let list=hargaData.filter(h=>destMatch(h) && (!v || norm(h.vtype)===v));
+  // cocok tipe: persis dulu, kalau tak ada coba longgar (mengandung)
+  const vNS = noSpace(v);
+  const vtypeMatch = h => {
+    if(!v) return true;
+    const hv = norm(h.vtype);
+    if(hv===v) return true;
+    const hvNS = noSpace(h.vtype);
+    return hvNS && vNS && (hvNS===vNS || hvNS.includes(vNS) || vNS.includes(hvNS));
+  };
+  let list=hargaData.filter(h=>destMatch(h) && vtypeMatch(h));
   // dedup per ekspedisi (ambil termurah)
   const best={};
   list.forEach(h=>{
