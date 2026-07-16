@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v54</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v57</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1276,16 +1276,21 @@ function pilihEksp(id,eksp,price){
 
 // ============ TAHAP 2: GROUP ============
 function goGroup(){
-  // hanya proses baris yang sudah dipilih ekspedisinya
-  const dipilih = rows.filter(r=>r.pilihEksp);
+  // baris dianggap siap kalau leg-1 (atau leg-2 utk multileg) sudah dipilih
+  const dipilih = rows.filter(r=> r.pilihEksp || (r.multiLeg && r.eksp2));
   if(!dipilih.length){ toast('Pilih ekspedisi minimal 1 tujuan dulu','err'); return; }
-  // baris terpilih wajib ada jam muat
   for(const r of dipilih){
     if(!r.jam){ toast('Isi Jam Muat untuk: '+r.tuj,'err'); return; }
+    if(r.multiLeg && (!r.pilihEksp || !r.eksp2)){
+      toast('Multi Leg: pilih ekspedisi DARAT & LAUT untuk '+r.tuj,'err'); return;
+    }
   }
-  // kumpulkan ekspedisi unik (hanya dari yang dipilih)
+  // kumpulkan ekspedisi unik — multi leg masuk 2 grup (darat & laut)
   const grup={};
-  dipilih.forEach(r=>{ const k=r.pilihEksp; (grup[k]=grup[k]||[]).push(r); });
+  dipilih.forEach(r=>{
+    if(r.pilihEksp) (grup[r.pilihEksp]=grup[r.pilihEksp]||[]).push(r);
+    if(r.multiLeg && r.eksp2) (grup[r.eksp2]=grup[r.eksp2]||[]).push(r);
+  });
   const bar=document.getElementById('grp-bar');
   bar.innerHTML=Object.keys(grup).map(k=>
     `<button class="grp-pill" onclick="pilihGrup(&quot;${k.replace(/"/g,'&quot;')}&quot;)">${k} <span class="cnt">${grup[k].length}</span></button>`
@@ -1323,7 +1328,8 @@ function buatNoOrder(){
 
 let currentBatch=null;
 function buildPesan(eksp){
-  const items=rows.filter(r=>r.pilihEksp===eksp);
+  // ambil order untuk ekspedisi ini: sbg leg darat ATAU leg laut
+  const items=rows.filter(r=> r.pilihEksp===eksp || (r.multiLeg && r.eksp2===eksp));
   const noOrd=buatNoOrder();
   const tglShow=r=> r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText);
   let lines='';
@@ -1341,6 +1347,21 @@ function buildPesan(eksp){
   // item tunggal
   single.forEach(r=>{
     no++;
+    // MULTI LEG: tampilkan sesuai leg untuk ekspedisi ini, TANPA jam muat
+    if(r.multiLeg){
+      const legDarat = (r.pilihEksp===eksp);
+      if(legDarat){
+        lines += no+'. '+(r.tuj)+'\n'+
+                 '   🔗 LEG 1 (DARAT) → '+(r.pelabuhan||'-')+'\n'+
+                 '   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n'+
+                 '   🚛 '+(r.tipe||'-')+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
+      }else{
+        lines += no+'. '+(r.tuj)+'\n'+
+                 '   🔗 LEG 2 (LAUT) dari '+(r.pelabuhan||'-')+'\n'+
+                 '   🚢 '+(r.tipe2||'-')+(isKontainer(r.tipe2)?(' — '+rupiah(r.harga2)):'')+'\n';
+      }
+      return;
+    }
     lines += no+'. '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
@@ -1597,7 +1618,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderRows();
   setTimeout(loadDraft, 1500); // muat draft + final dari Sheet
   // auto-refresh tiap 30 detik
-  setInterval(()=>loadDraft(true), 30000);
+  setInterval(()=>{ loadDraft(true); loadHarga(0); loadDist(); }, 300000); // 5 menit
 });
 </script>
 </body>
