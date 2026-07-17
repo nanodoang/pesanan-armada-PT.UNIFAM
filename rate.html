@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranking Rate — PT. UNIFAM</title>
+<style>
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--amber:#B45309;--red:#B91C1C;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 14px 50px}
+.hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:15px 20px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.hdr a.back{background:rgba(255,255,255,.15);color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;flex-shrink:0}
+.hdr .ic{width:40px;height:40px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:21px}
+.hdr h1{font-size:17px;font-weight:800}
+.hdr p{font-size:11.5px;opacity:.85}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tab{padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted)}
+.tab.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+textarea{width:100%;min-height:120px;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;font-family:monospace;font-size:12px;resize:vertical}
+.drop{border:2px dashed var(--line);border-radius:9px;padding:26px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer}
+.drop:hover{border-color:var(--navy);background:#F7FAFF}
+.btn{background:var(--navy);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px}
+.btn.sec{background:#EEF2F7;color:var(--ink);border:1px solid var(--line)}
+.status{font-size:12px;color:var(--muted);margin-top:8px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+select,input.search{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
+input.search{flex:1;min-width:150px}
+.tbl-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);overflow:auto;max-height:65vh}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:640px}
+thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:#fff;font-weight:800;padding:11px 10px;white-space:nowrap;position:sticky;top:0;background:var(--navy);z-index:10}
+td{padding:10px;border-bottom:1px solid var(--line);background:var(--card)}
+tr:last-child td{border-bottom:none}
+.rank{width:44px;text-align:center;font-weight:800}
+.medal{font-size:15px}
+.eksp{font-weight:800;color:var(--navy-d)}
+.rate{font-weight:800;white-space:nowrap}
+.r1{background:#EAF7F1}
+.r1 .rate{color:var(--teal)}
+.sel{font-size:10px;color:var(--red);font-weight:700}
+.kota{font-weight:700}
+.badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF2F7;color:var(--muted)}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
+.hint{font-size:11.5px;color:var(--muted);margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <a href="planning.html" class="back">← Planning</a>
+    <div class="ic">🏆</div>
+    <div>
+      <h1>Ranking Rate</h1>
+      <p>PT. UNIFAM — Upload/paste rate & lihat ranking per kota & tipe mobil</p>
+    </div>
+  </div>
+
+  <!-- INPUT -->
+  <div class="card">
+    <div class="tabs">
+      <div class="tab on" id="t-sheet" onclick="pilihTab('sheet')">📊 Dari Sheet</div>
+      <div class="tab" id="t-paste" onclick="pilihTab('paste')">📋 Paste</div>
+      <div class="tab" id="t-file" onclick="pilihTab('file')">📁 Upload</div>
+    </div>
+
+    <div id="p-sheet">
+      <p class="hint">Ambil rate langsung dari Google Sheet (sumber yang sama dengan planning).</p>
+      <button class="btn" onclick="muatSheet()">↻ Muat Rate dari Sheet</button>
+    </div>
+
+    <div id="p-paste" style="display:none">
+      <p class="hint">Paste data rate (dari Excel/Sheet). Kolom: <b>Ekspedisi | Tipe | Kota | Harga</b> — urutan bebas kalau ada header.</p>
+      <textarea id="paste-box" placeholder="VOLT	FUSO 32	SURABAYA	2300000&#10;SCB	Kontainer-20&quot; 32	MANADO	21000000"></textarea>
+      <button class="btn" onclick="prosesPaste()">Proses Data</button>
+    </div>
+
+    <div id="p-file" style="display:none">
+      <p class="hint">Upload file CSV berisi data rate.</p>
+      <div class="drop" onclick="document.getElementById('file-in').click()">Ketuk untuk pilih file CSV</div>
+      <input type="file" id="file-in" accept=".csv,text/csv" style="display:none" onchange="prosesFile(this.files[0])">
+    </div>
+
+    <div class="status" id="status">Belum ada data rate</div>
+    <div id="simpan-box" style="display:none;margin-top:10px;padding:10px 12px;background:#FEF6E7;border:1px solid #F4D58A;border-radius:8px">
+      <div style="font-size:12px;color:#92400E;margin-bottom:7px">
+        <b id="simpan-info"></b> — rate dengan Ekspedisi+Tipe+Kota sama akan <b>diperbarui harganya</b>, yang baru ditambahkan. Rate lama lain tetap aman.
+      </div>
+      <button class="btn" style="margin:0;background:#B45309" onclick="simpanKeSheet()">💾 Simpan ke Sheet</button>
+    </div>
+  </div>
+
+  <!-- FILTER -->
+  <div class="filters">
+    <select id="f-kota" onchange="render()"><option value="">— semua kota —</option></select>
+    <select id="f-tipe" onchange="render()"><option value="">— semua tipe mobil —</option></select>
+    <input class="search" id="f-cari" placeholder="Cari ekspedisi / kota…" oninput="render()">
+    <span class="badge" id="count">0 rate</span>
+  </div>
+
+  <!-- TABEL RANKING -->
+  <div class="tbl-card">
+    <table>
+      <thead>
+        <tr><th class="rank">#</th><th>Kota</th><th>Tipe Mobil</th><th>Ekspedisi</th><th>Rate</th><th>Selisih vs Rank 1</th></tr>
+      </thead>
+      <tbody id="body"><tr><td colspan="6" class="empty">Muat data rate dulu</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="foot">PT. UNIFAM · Ranking rate per kota & tipe mobil</p>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
+let RATE=[]; // [{eksp,tipe,kota,harga}]
+
+function pilihTab(t){
+  ['sheet','paste','file'].forEach(x=>{
+    document.getElementById('t-'+x).classList.toggle('on', x===t);
+    document.getElementById('p-'+x).style.display = (x===t)?'block':'none';
+  });
+}
+function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function esc(s){ return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+function rupiah(n){ return 'Rp '+(Number(n)||0).toLocaleString('id-ID'); }
+function toNumber(v){
+  if(v==null) return 0;
+  let s=String(v).replace(/[^\d,.-]/g,'').trim();
+  if(!s) return 0;
+  if(s.includes(',') && s.includes('.')) s = s.lastIndexOf(',')>s.lastIndexOf('.') ? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,'');
+  else if(s.includes(',')) s = /,\d{1,2}$/.test(s) ? s.replace(',','.') : s.replace(/,/g,'');
+  else if((s.match(/\./g)||[]).length>1) s=s.replace(/\./g,'');
+  else if(/\.\d{3}$/.test(s)) s=s.replace(/\./g,'');
+  const n=parseFloat(s); return isNaN(n)?0:n;
+}
+function extractKota(t){
+  let s=String(t||'').replace(/\([^)]*\)/g,'').trim();
+  const p=s.split(/[-–—]/);
+  return norm(p.length>1?p[p.length-1]:s);
+}
+function parseCSV(txt){
+  const out=[]; const lines=String(txt).split(/\r?\n/);
+  for(const line of lines){
+    if(!line.trim()) continue;
+    const row=[]; let cur='', q=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"') q=!q;
+      else if((c===','||c==='\t') && !q){ row.push(cur); cur=''; }
+      else cur+=c;
+    }
+    row.push(cur); out.push(row);
+  }
+  return out;
+}
+
+// ==== SUMBER DATA ====
+function muatSheet(){
+  setStatus('Memuat rate dari Sheet…');
+  const cb='cbR'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok' && resp.rows && resp.rows.length){ prosesMatrix(resp.rows, true); }
+    else setStatus('⚠️ Gagal memuat dari Sheet');
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getrate&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; setStatus('⚠️ Gagal terhubung'); };
+  document.body.appendChild(sc);
+}
+function prosesPaste(){
+  const t=document.getElementById('paste-box').value.trim();
+  if(!t){ setStatus('⚠️ Tempel data dulu'); return; }
+  prosesMatrix(parseCSV(t));
+}
+function prosesFile(f){
+  if(!f) return;
+  const rd=new FileReader();
+  rd.onload=e=>prosesMatrix(parseCSV(e.target.result));
+  rd.readAsText(f);
+}
+
+function prosesMatrix(rws, dariSheet){
+  if(!rws||!rws.length){ setStatus('⚠️ Data kosong'); return; }
+  const head=rws[0].map(h=>norm(h));
+  const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
+  let iE=idx(['expedition','ekspedisi','vendor']);
+  let iT=idx(['vehicle','tipe','type','jenis','truck']);
+  let iK=idx(['description','tujuan','kota','city','delivery']);
+  let iP=idx(['price','harga','rate']);
+  let start=1;
+  // tanpa header → pakai urutan default: eksp, tipe, kota, harga
+  if(iE<0 && iT<0 && iK<0 && iP<0){ iE=0; iT=1; iK=2; iP=3; start=0; }
+  RATE=[];
+  for(let i=start;i<rws.length;i++){
+    const r=rws[i]; if(!r||r.length<2) continue;
+    const harga=toNumber(iP>=0?r[iP]:'');
+    const kotaRaw=String(iK>=0?(r[iK]||''):'').trim();
+    if(!kotaRaw || harga<=0) continue;
+    RATE.push({
+      eksp: String(iE>=0?(r[iE]||''):'').trim(),
+      tipe: String(iT>=0?(r[iT]||''):'').trim(),
+      kotaRaw: kotaRaw,
+      kota: extractKota(kotaRaw),
+      harga: harga
+    });
+  }
+  setStatus(RATE.length?('✓ '+RATE.length+' rate dimuat'):'⚠️ Tidak ada rate valid');
+  isiFilter(); render(); tampilTombolSimpan(dariSheet);
+}
+function setStatus(t){ document.getElementById('status').textContent=t; }
+
+function isiFilter(){
+  const kotas=[...new Set(RATE.map(r=>r.kota))].sort();
+  const tipes=[...new Set(RATE.map(r=>r.tipe).filter(Boolean))].sort();
+  const fk=document.getElementById('f-kota'), ft=document.getElementById('f-tipe');
+  const vk=fk.value, vt=ft.value;
+  fk.innerHTML='<option value="">— semua kota —</option>'+kotas.map(k=>`<option value="${esc(k)}" ${vk===k?'selected':''}>${esc(k.toUpperCase())}</option>`).join('');
+  ft.innerHTML='<option value="">— semua tipe mobil —</option>'+tipes.map(t=>`<option value="${esc(t)}" ${vt===t?'selected':''}>${esc(t)}</option>`).join('');
+}
+
+// ==== RANKING: per (kota + tipe), urut termurah ====
+function render(){
+  const fk=document.getElementById('f-kota').value;
+  const ft=document.getElementById('f-tipe').value;
+  const q=norm(document.getElementById('f-cari').value);
+  let data=RATE.filter(r=>{
+    if(fk && r.kota!==fk) return false;
+    if(ft && r.tipe!==ft) return false;
+    if(q && !(norm(r.eksp)+' '+r.kota+' '+norm(r.tipe)).includes(q)) return false;
+    return true;
+  });
+  document.getElementById('count').textContent=data.length+' rate';
+  if(!data.length){
+    document.getElementById('body').innerHTML='<tr><td colspan="6" class="empty">Tidak ada rate yang cocok</td></tr>';
+    return;
+  }
+  // kelompokkan per kota+tipe
+  const grup={};
+  data.forEach(r=>{ const k=r.kota+'|'+norm(r.tipe); (grup[k]=grup[k]||[]).push(r); });
+  const medal=['🥇','🥈','🥉'];
+  let html='';
+  Object.keys(grup).sort().forEach(k=>{
+    const list=grup[k].sort((a,b)=>a.harga-b.harga);
+    const termurah=list[0].harga;
+    list.forEach((r,i)=>{
+      const selisih=r.harga-termurah;
+      html+=`<tr class="${i===0?'r1':''}">
+        <td class="rank">${i<3?`<span class="medal">${medal[i]}</span>`:(i+1)}</td>
+        <td class="kota">${esc(r.kota.toUpperCase())}</td>
+        <td>${esc(r.tipe)||'-'}</td>
+        <td class="eksp">${esc(r.eksp)||'-'}</td>
+        <td class="rate">${rupiah(r.harga)}</td>
+        <td>${i===0?'<span class="badge" style="background:#DCFCE7;color:#15803D">termurah</span>':('<span class="sel">+'+rupiah(selisih)+'</span>')}</td>
+      </tr>`;
+    });
+  });
+  document.getElementById('body').innerHTML=html;
+}
+
+// ==== SIMPAN KE SHEET ====
+function tampilTombolSimpan(dariSheet){
+  const box=document.getElementById('simpan-box');
+  if(!box) return;
+  // tombol simpan hanya untuk data hasil paste/upload (bukan yang baru dimuat dari Sheet)
+  if(dariSheet || !RATE.length){ box.style.display='none'; return; }
+  document.getElementById('simpan-info').textContent=RATE.length+' rate siap disimpan';
+  box.style.display='block';
+}
+function simpanKeSheet(){
+  if(!RATE.length){ setStatus('⚠️ Tidak ada data'); return; }
+  const pesan='Simpan '+RATE.length+' rate ke Sheet?\n\n'+
+    '• Ekspedisi + Tipe + Kota sama → harga DIPERBARUI\n'+
+    '• Yang baru → DITAMBAHKAN\n'+
+    '• Rate lama lainnya → tetap aman (tidak dihapus)\n\n'+
+    'Planning akan langsung memakai rate baru ini.';
+  if(!confirm(pesan)) return;
+  setStatus('Menyimpan ke Sheet…');
+  kirimBatch(0,0,0);
+}
+function kirimBatch(mulai, upd, tmb){
+  const UKURAN=15;
+  if(mulai>=RATE.length){
+    setStatus('✓ Tersimpan — '+upd+' diperbarui, '+tmb+' ditambahkan');
+    alert('Berhasil disimpan!\n\n'+upd+' rate diperbarui\n'+tmb+' rate baru ditambahkan\n\nPlanning akan memakai rate ini (refresh planning bila perlu).');
+    document.getElementById('simpan-box').style.display='none';
+    return;
+  }
+  const potong=RATE.slice(mulai,mulai+UKURAN).map(r=>({eksp:r.eksp,tipe:r.tipe,kota:r.kotaRaw,harga:r.harga}));
+  const cb='cbSave'+Date.now();
+  window[cb]=function(resp){
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok'){
+      setStatus('Menyimpan… '+Math.min(mulai+UKURAN,RATE.length)+'/'+RATE.length);
+      kirimBatch(mulai+UKURAN, upd+(resp.update||0), tmb+(resp.tambah||0));
+    }else{
+      setStatus('⚠️ Gagal: '+(resp&&resp.message?resp.message:'tidak ada respons'));
+      alert('GAGAL SIMPAN:\n\n'+(resp&&resp.message?resp.message:'tidak ada respons'));
+    }
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=saverate&items='+encodeURIComponent(JSON.stringify(potong))+'&callback='+cb;
+  sc.onerror=function(){ delete window[cb]; setStatus('⚠️ Gagal terhubung'); };
+  document.body.appendChild(sc);
+}
+
+muatSheet();
+</script>
+</body>
+</html>

@@ -178,13 +178,14 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v60</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v61</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
   <div style="margin-left:auto;flex-shrink:0;display:flex;flex-direction:column;gap:5px">
     <a href="dashboard.html" style="background:#1D9E75;color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap;justify-content:center">📊 Dashboard</a>
     <a href="jadwal-kapal.html" style="background:#0EA5E9;color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap;justify-content:center">🚢 Jadwal Kapal</a>
+    <a href="rate.html" style="background:#B45309;color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap;justify-content:center">🏆 Rate</a>
     <a href="history.html" style="background:#7C3AED;color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap;justify-content:center">📋 History</a>
   </div>
 </div>
@@ -975,23 +976,39 @@ function updateDraftField(r, field){
 let filterTgl = '';
 function setFilterTgl(v){ filterTgl = v||''; renderRows(); }
 // daftar tanggal unik dari data, isi dropdown
+// normalisasi tanggal → "yyyy-mm-dd" untuk perbandingan (apa pun formatnya)
+function kunciTgl(raw){
+  if(raw==null || raw==='') return '';
+  const s=String(raw).trim();
+  // dd/mm/yyyy atau dd-mm-yyyy
+  let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  // ISO / Date parseable
+  const d=new Date(s);
+  if(!isNaN(d.getTime())){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  return s;
+}
 function updateFilterTgl(){
   const sel=document.getElementById('filter-tgl');
   if(!sel) return;
-  const tglSet=[...new Set(rows.map(r=>r.tgl).filter(Boolean))];
-  // urutkan (dd/mm/yyyy)
-  const key=t=>{ const m=String(t).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); return m?(m[3]+m[2].padStart(2,'0')+m[1].padStart(2,'0')):String(t); };
-  tglSet.sort((a,b)=>key(a).localeCompare(key(b)));
+  // kelompokkan by kunci tanggal (biar format beda tetap satu)
+  const map={};
+  rows.forEach(r=>{
+    const k=kunciTgl(r.tgl);
+    if(!k) return;
+    if(!map[k]) map[k]={ contoh:r.tgl, n:0 };
+    map[k].n++;
+  });
+  const keys=Object.keys(map).sort();
   const kini=filterTgl;
   sel.innerHTML='<option value="">— semua tanggal ('+rows.length+') —</option>'+
-    tglSet.map(t=>{
-      const n=rows.filter(r=>r.tgl===t).length;
-      return `<option value="${t}" ${kini===t?'selected':''}>${tampilTgl(t)} (${n})</option>`;
-    }).join('');
+    keys.map(k=>`<option value="${k}" ${kini===k?'selected':''}>${tampilTgl(map[k].contoh)} (${map[k].n})</option>`).join('');
 }
 // baris yang lolos filter
 function rowsTampil(){
-  return filterTgl ? rows.filter(r=>r.tgl===filterTgl) : rows;
+  return filterTgl ? rows.filter(r=>kunciTgl(r.tgl)===filterTgl) : rows;
 }
 
 function renderRows(){
@@ -1028,7 +1045,7 @@ function gridRate(r, leg, rank, pilihNow){
 function renderCards(){
   const wrap=document.getElementById('card-wrap');
   if(!wrap) return;
-  const vis=rowsTampil(); if(!vis.length){ wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Tidak ada order'+(filterTgl?(' untuk '+tampilTgl(filterTgl)):'')+'</div>'; return; }
+  const vis=rowsTampil(); if(!vis.length){ wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Tidak ada order pada tanggal ini</div>'; return; }
   let html='';
   rowsTampil().forEach((r,i)=>{
     const st = r.status || 'Baru';
