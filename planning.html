@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v61</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v63</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -990,25 +990,36 @@ function kunciTgl(raw){
   }
   return s;
 }
+// ambil tanggal dari baris (draft pakai .tgl, order final pakai .tglText)
+function tglBaris(r){ return (r && (r.tgl || r.tglText)) || ''; }
 function updateFilterTgl(){
   const sel=document.getElementById('filter-tgl');
-  if(!sel) return;
-  // kelompokkan by kunci tanggal (biar format beda tetap satu)
-  const map={};
-  rows.forEach(r=>{
-    const k=kunciTgl(r.tgl);
-    if(!k) return;
-    if(!map[k]) map[k]={ contoh:r.tgl, n:0 };
-    map[k].n++;
-  });
-  const keys=Object.keys(map).sort();
-  const kini=filterTgl;
-  sel.innerHTML='<option value="">— semua tanggal ('+rows.length+') —</option>'+
-    keys.map(k=>`<option value="${k}" ${kini===k?'selected':''}>${tampilTgl(map[k].contoh)} (${map[k].n})</option>`).join('');
+  if(!sel) { console.warn('filter-tgl tidak ditemukan'); return; }
+  try{
+    const map={};
+    (rows||[]).forEach(r=>{
+      const k=kunciTgl(tglBaris(r));
+      if(!k) return;
+      if(!map[k]) map[k]={ contoh:tglBaris(r), n:0 };
+      map[k].n++;
+    });
+    const keys=Object.keys(map).sort();
+    const kini=filterTgl;
+    let html='<option value="">— semua tanggal ('+(rows?rows.length:0)+') —</option>';
+    keys.forEach(k=>{
+      const lbl=tampilTgl(map[k].contoh)+' ('+map[k].n+')';
+      html+='<option value="'+k+'"'+(kini===k?' selected':'')+'>'+lbl+'</option>';
+    });
+    sel.innerHTML=html;
+    sel.disabled = keys.length===0;
+    if(keys.length===0){
+      sel.innerHTML='<option value="">(belum ada tanggal)</option>';
+    }
+  }catch(e){ console.warn('updateFilterTgl error', e); }
 }
 // baris yang lolos filter
 function rowsTampil(){
-  return filterTgl ? rows.filter(r=>kunciTgl(r.tgl)===filterTgl) : rows;
+  return filterTgl ? rows.filter(r=>kunciTgl(tglBaris(r))===filterTgl) : rows;
 }
 
 function renderRows(){
