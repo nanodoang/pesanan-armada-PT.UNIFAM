@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v58</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v60</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -221,6 +221,17 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 
     <div class="sec-lbl">Tabel Perbandingan Rate</div>
     <p class="hint" style="text-align:left;margin-bottom:8px">Centang tujuan lalu <b>Gabung Multi-drop</b> untuk 1 mobil banyak tujuan. Ketuk <b>klik</b> di rate untuk pilih ekspedisi.</p>
+
+    <!-- FILTER TANGGAL -->
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--navy)">📅 Filter Tanggal</span>
+      <select id="filter-tgl" onchange="setFilterTgl(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;min-width:140px">
+        <option value="">— semua tanggal —</option>
+      </select>
+      <span id="filter-info" style="font-size:11px;color:var(--text3)"></span>
+      <button onclick="setFilterTgl('')" style="background:#EEF2F7;border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">✕ Reset</button>
+    </div>
+
     <div id="drop-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:#EEF6FF;border:1px solid #BBD8F5;border-radius:8px;margin-bottom:8px;flex-wrap:wrap">
       <span style="font-size:13px;color:#0C447C"><b id="drop-count">0</b> tercentang</span>
       <button id="btn-gabung" onclick="gabungMultidrop()" style="background:#0C447C;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🚚 Gabung Multi-drop</button>
@@ -960,7 +971,33 @@ function updateDraftField(r, field){
   gasJSONP('action=updatedraft&draft_id='+encodeURIComponent(r.draft_id)+
            '&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(val));
 }
+// ==== FILTER TANGGAL ====
+let filterTgl = '';
+function setFilterTgl(v){ filterTgl = v||''; renderRows(); }
+// daftar tanggal unik dari data, isi dropdown
+function updateFilterTgl(){
+  const sel=document.getElementById('filter-tgl');
+  if(!sel) return;
+  const tglSet=[...new Set(rows.map(r=>r.tgl).filter(Boolean))];
+  // urutkan (dd/mm/yyyy)
+  const key=t=>{ const m=String(t).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); return m?(m[3]+m[2].padStart(2,'0')+m[1].padStart(2,'0')):String(t); };
+  tglSet.sort((a,b)=>key(a).localeCompare(key(b)));
+  const kini=filterTgl;
+  sel.innerHTML='<option value="">— semua tanggal ('+rows.length+') —</option>'+
+    tglSet.map(t=>{
+      const n=rows.filter(r=>r.tgl===t).length;
+      return `<option value="${t}" ${kini===t?'selected':''}>${tampilTgl(t)} (${n})</option>`;
+    }).join('');
+}
+// baris yang lolos filter
+function rowsTampil(){
+  return filterTgl ? rows.filter(r=>r.tgl===filterTgl) : rows;
+}
+
 function renderRows(){
+  updateFilterTgl();
+  const info=document.getElementById('filter-info');
+  if(info) info.textContent = filterTgl ? ('menampilkan '+rowsTampil().length+' dari '+rows.length+' order') : '';
   renderTable();
   renderCards();
 }
@@ -991,9 +1028,9 @@ function gridRate(r, leg, rank, pilihNow){
 function renderCards(){
   const wrap=document.getElementById('card-wrap');
   if(!wrap) return;
-  if(!rows.length){ wrap.innerHTML=''; return; }
+  const vis=rowsTampil(); if(!vis.length){ wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Tidak ada order'+(filterTgl?(' untuk '+tampilTgl(filterTgl)):'')+'</div>'; return; }
   let html='';
-  rows.forEach((r,i)=>{
+  rowsTampil().forEach((r,i)=>{
     const st = r.status || 'Baru';
     let badge, cls='ocard';
     if(st==='Belum') badge='<span class="oc-badge st-belum">⏳ Belum</span>';
@@ -1104,7 +1141,7 @@ function renderTable(){
   head+='</tr></thead>';
 
   let body='<tbody>';
-  rows.forEach((r,i)=>{
+  rowsTampil().forEach((r,i)=>{
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     const expCell = r.pilihEksp
       ? `<td class="cell-exp">${r.pilihEksp}</td><td class="cell-rate">${rupiah(r.pilihHarga)}</td>`
@@ -1416,22 +1453,33 @@ function buildPesan(eksp){
                   '   *Total: '+rupiah(totalDrop)+'*\n')
                : '');
 
-    // cek non-rank1 untuk tiap tujuan dalam multidrop
+    // cek non-rank1 untuk multidrop → bandingkan TOTAL (tertinggi + biaya drop)
+    let adaNonRank1Drop=false;
+    let rincianDrop='';
+    let totalTermurah=0;
     g.forEach(r=>{
       const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
       if(rank.length){
+        const r1 = rank[0];
+        if(r1 && (r1.price||0) > totalTermurah) totalTermurah = r1.price||0;
         const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
         if(posisi>0){
-          adaNonRank1=true;
-          const r1 = rank[0];
-          const selisih = (r.pilihHarga||0) - (r1.price||0);
-          catatanApprove += '• [Multidrop] '+r.tuj+' ('+r.tipe+')\n'+
-            '   Termurah: '+(r1.expedition||'-')+' — '+rupiah(r1.price)+'\n'+
-            '   Dipilih: '+eksp+' — '+rupiah(r.pilihHarga)+
-            (selisih>0?(' (selisih +'+rupiah(selisih)+')'):'')+'\n';
+          adaNonRank1Drop=true;
+          rincianDrop += '   - '+r.tuj+': termurah '+(r1.expedition||'-')+' '+rupiah(r1.price)+'\n';
         }
       }
     });
+    if(adaNonRank1Drop){
+      adaNonRank1=true;
+      const totalTermurahDrop = totalTermurah + biayaDrop;
+      const selisih = totalDrop - totalTermurahDrop;
+      catatanApprove += '• [MULTI-DROP] '+tujList+' ('+g[0].tipe+')\n'+
+        rincianDrop+
+        '   Total termurah: '+rupiah(totalTermurahDrop)+'\n'+
+        '   Total dipilih ('+eksp+'): '+rupiah(totalDrop)+'\n'+
+        '   (tertinggi '+rupiah(rateTertinggi)+' + drop '+rupiah(biayaDrop)+')'+
+        (selisih>0?('\n   Selisih: +'+rupiah(selisih)):'')+'\n';
+    }
   });
 
   const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrd)+
@@ -1477,11 +1525,28 @@ function buildPesan(eksp){
   }
 
   // siapkan data simpan (orderRows untuk GSheet)
-  const orderRows=items.map(r=>({
-    tgl: tglShow(r), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
-    kubik: r.kubik||'', harga: r.pilihHarga||0,
-    sales: r.sales||'', total: r.total||''
-  }));
+  // MULTI-DROP: hanya baris pertama grup yang bawa harga TOTAL (tertinggi + biaya drop)
+  const dropSeen={};
+  const orderRows=items.map(r=>{
+    let hargaSimpan = r.pilihHarga||0;
+    if(r.dropGroup){
+      if(dropSeen[r.dropGroup]){
+        hargaSimpan = 0; // tujuan berikutnya dalam grup: tanpa harga
+      }else{
+        dropSeen[r.dropGroup]=true;
+        const g = items.filter(x=>x.dropGroup===r.dropGroup);
+        const tertinggi = Math.max(...g.map(x=>x.pilihHarga||0));
+        hargaSimpan = tertinggi + (g[0].biayaDrop||0); // total multidrop
+      }
+    }
+    // multi leg: harga = darat + laut (di baris yang sama)
+    if(r.multiLeg) hargaSimpan = (r.pilihHarga||0) + (r.harga2||0);
+    return {
+      tgl: tglShow(r), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
+      kubik: r.kubik||'', harga: hargaSimpan,
+      sales: r.sales||'', total: r.total||''
+    };
+  });
   currentBatch={ noOrd, eksp, msg, msgApprove, orderRows, items };
 }
 
