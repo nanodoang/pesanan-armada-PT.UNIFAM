@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v66</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v67</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -581,6 +581,7 @@ function getRanking(tujuan, tipe){
   const kota = extractKota(tujuan);
   const v = norm(mapTipe(tipe));
   const noSpace = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const vNS = noSpace(v);
   const kotaNS = noSpace(kota);
   if(!kotaNS) return [];
   // cocok KOTA vs KOTA, harus SAMA PERSIS (abaikan spasi/tanda baca)
@@ -589,14 +590,18 @@ function getRanking(tujuan, tipe){
     const dKotaNS = noSpace(extractKota(h.dest));
     return dKotaNS && dKotaNS===kotaNS;
   };
-  // cocok tipe: persis dulu, kalau tak ada coba longgar (mengandung)
-  const vNS = noSpace(v);
+  // cocok tipe: PERSIS dulu (biar 20 FT tak nyangkut ke 20 FT C / combo)
+  const pilihCombo = /c$/.test(vNS) || /\(c\)/.test(v);
   const vtypeMatch = h => {
     if(!v) return true;
     const hv = norm(h.vtype);
-    if(hv===v) return true;
     const hvNS = noSpace(h.vtype);
-    return hvNS && vNS && (hvNS===vNS || hvNS.includes(vNS) || vNS.includes(hvNS));
+    // 1) sama persis (utama)
+    if(hv===v || hvNS===vNS) return true;
+    // 2) fallback longgar — reguler & combo TIDAK boleh saling cocok
+    const hvCombo = /\(c\)/.test(hv) || /c$/.test(hvNS);
+    if(hvCombo !== pilihCombo) return false;
+    return hvNS && vNS && (hvNS.includes(vNS) || vNS.includes(hvNS));
   };
   let list=hargaData.filter(h=>destMatch(h) && vtypeMatch(h));
   // dedup per ekspedisi (ambil termurah)
