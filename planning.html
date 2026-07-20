@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v64</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v66</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -390,7 +390,7 @@ function prosesRate(rws){
     price: toNumber(r[iP]),
     kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
   })).filter(r=>r.dest && r.price>0);
-  setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat') : '⚠️ Tidak ada rate valid');
+  setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat'+(window._rateSumber?(' ['+window._rateSumber+']'):'')) : '⚠️ Tidak ada rate valid');
   renderRanks();
   return hargaData.length>0;
 }
@@ -408,6 +408,7 @@ function loadHarga(tries){
     if(resp && resp.status==='ok' && resp.rows && resp.rows.length){
       selesai=true;
       delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+      window._rateSumber = resp.sumber || '?';
       prosesRate(resp.rows);
       return;
     }
@@ -736,7 +737,7 @@ function jamOptions(sel){
 
 // Opsi jenis truck (pilih manual)
 function truckOptions(sel){
-  const list=['20 FT','20 FT C','40 FT','FUSO 48','FUSO 32','FUSO 27','TRONTON 70','WINGBOX','CD 17'];
+  const list=['20 FT','20 FT C','40 FT','FUSO 48','FUSO 32','FUSO 27','TRONTON 70','WINGBOX','CD 17','CD 20'];
   let opt='<option value="">-- pilih --</option>';
   list.forEach(t=>{ opt+=`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`; });
   return opt;
@@ -755,7 +756,8 @@ function normalizeTipe(t){
     'fuso 27':'FUSO 27','fuso27':'FUSO 27',
     'tronton 70':'TRONTON 70','tronton70':'TRONTON 70','tronton':'TRONTON 70',
     'wingbox':'WINGBOX','wing box':'WINGBOX',
-    'cd 17':'CD 17','cd17':'CD 17'
+    'cd 17':'CD 17','cd17':'CD 17',
+    'cd 20':'CD 20','cd20':'CD 20'
   };
   return map[n] || t; // kalau tak dikenali, pakai apa adanya
 }
