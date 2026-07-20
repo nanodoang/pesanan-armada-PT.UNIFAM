@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v63</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v64</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -398,18 +398,22 @@ function prosesRate(rws){
 function loadHarga(tries){
   tries = tries||0;
   setHargaStatus('Memuat data rate…'+(tries?(' (percobaan '+(tries+1)+')'):''));
-  // 1) coba lewat GAS (JSONP) dulu — tahan blokir jaringan kantor & CORS
   const cb='cbRate'+Date.now();
   let selesai=false;
-  const to=setTimeout(()=>{ if(!selesai){ selesai=true; loadHargaFetch(tries); } }, 6000);
+  // timeout 20 detik (GAS baca sheet langsung bisa lambat di load pertama)
+  const to=setTimeout(()=>{ if(!selesai){ selesai=true; loadHargaFetch(tries); } }, 20000);
   window[cb]=function(resp){
-    if(selesai) return; selesai=true; clearTimeout(to);
-    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    // walau timeout sudah lewat, kalau GAS akhirnya balas dg data valid, tetap pakai
+    clearTimeout(to);
     if(resp && resp.status==='ok' && resp.rows && resp.rows.length){
+      selesai=true;
+      delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
       prosesRate(resp.rows);
-    }else{
-      loadHargaFetch(tries);
+      return;
     }
+    if(selesai) return; selesai=true;
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    loadHargaFetch(tries);
   };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?action=getrate&callback='+cb;
@@ -1733,6 +1737,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>{ loadDraft(true); loadHarga(0); loadDist(); }, 300000); // 5 menit
 });
 </script>
-<a href="https://nanodoang.github.io/Logistic-Transportation/" style="position:fixed;bottom:18px;left:18px;display:flex;align-items:center;gap:8px;background:#1a1f1a;color:#f0efe6;text-decoration:none;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,0.25);z-index:9999;" onmouseover="this.style.background='#b5502e'" onmouseout="this.style.background='#1a1f1a'">← Portal Utama</a>
 </body>
 </html>
