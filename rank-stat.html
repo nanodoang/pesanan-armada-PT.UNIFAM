@@ -5,42 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Porsi Ranking Rate — PT. UNIFAM</title>
 <style>
-:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--amber:#B45309;--red:#B91C1C;--purple:#7C3AED;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--blue:#3B82F6;--amber:#B45309;--red:#B91C1C;--purple:#7C3AED;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
-.wrap{max-width:1000px;margin:0 auto;padding:16px 14px 70px}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 14px 70px}
 .hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:15px 20px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px}
 .hdr a.back{background:rgba(255,255,255,.15);color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;flex-shrink:0}
 .hdr .ic{width:40px;height:40px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:21px}
 .hdr h1{font-size:17px;font-weight:800}
 .hdr p{font-size:11.5px;opacity:.85}
 .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
-.tabs{display:flex;gap:5px}
-.tab{padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--line);background:#fff;color:var(--muted);white-space:nowrap}
-.tab.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 select{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
 .btn{background:var(--navy);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.dua{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:900px){ .dua{grid-template-columns:1fr 1fr} }
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card.laut{border-top:4px solid #0EA5E9}
+.card.darat{border-top:4px solid var(--amber)}
 .card h2{font-size:14px;margin-bottom:3px}
 .card .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
-.rank-row{display:flex;align-items:center;gap:11px;margin-bottom:11px}
-.rank-lbl{width:78px;flex-shrink:0;font-size:12.5px;font-weight:800;display:flex;align-items:center;gap:5px}
-.bar-wrap{flex:1;background:#EEF2F7;border-radius:20px;height:26px;overflow:hidden;position:relative}
-.bar{height:100%;border-radius:20px;display:flex;align-items:center;padding:0 10px;color:#fff;font-size:11.5px;font-weight:800;min-width:2px;transition:width .4s}
-.rank-num{width:96px;flex-shrink:0;text-align:right;font-size:12px}
-.rank-num b{font-size:15px}
-.b1{background:var(--teal)}.b2{background:#3B82F6}.b3{background:var(--amber)}.b4{background:var(--purple)}.b5{background:#94A3B8}
-.stat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.stat{flex:1;min-width:110px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
-.stat .n{font-size:20px;font-weight:800}
-.stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
-th{text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:800;padding:8px;border-bottom:2px solid var(--line);white-space:nowrap}
-td{padding:9px 8px;border-bottom:1px solid var(--line)}
+.rank-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.rank-lbl{width:74px;flex-shrink:0;font-size:12px;font-weight:800;display:flex;align-items:center;gap:4px}
+.bar-wrap{flex:1;background:#EEF2F7;border-radius:20px;height:24px;overflow:hidden}
+.bar{height:100%;border-radius:20px;display:flex;align-items:center;padding:0 9px;color:#fff;font-size:11px;font-weight:800;min-width:2px;transition:width .4s}
+.rank-num{width:88px;flex-shrink:0;text-align:right;font-size:11.5px}
+.rank-num b{font-size:14px}
+.b1{background:var(--teal)}.b2{background:var(--blue)}.b3{background:var(--amber)}.b4{background:var(--purple)}.b5{background:#94A3B8}
+.stat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.stat{flex:1;min-width:88px;background:#F8FAFC;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.stat .n{font-size:17px;font-weight:800}
+.stat .l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.sec-lbl{font-size:12px;font-weight:800;color:var(--navy);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+th{text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:800;padding:8px 6px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
 tr:last-child td{border-bottom:none}
-.mini{font-size:10.5px;color:var(--muted)}
+.mini{font-size:10px;color:var(--muted)}
 .loading,.empty{text-align:center;padding:36px 20px;color:var(--muted)}
-.note{background:#FEF6E7;border:1px solid #F4D58A;border-radius:9px;padding:10px 13px;font-size:11.5px;color:#92400E;margin-bottom:14px}
+.note{background:#FEF6E7;border:1px solid #F4D58A;border-radius:9px;padding:10px 13px;font-size:11.5px;color:#92400E;margin-top:14px}
+.diag{background:#FEF2F2;border:1px solid #FECACA;border-radius:9px;padding:11px 13px;font-size:11.5px;color:#991B1B;margin-top:12px;text-align:left}
 .foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
 </style>
 </head>
@@ -51,22 +54,19 @@ tr:last-child td{border-bottom:none}
     <div class="ic">🎯</div>
     <div>
       <h1>Porsi Ranking Rate</h1>
-      <p>PT. UNIFAM — Berapa kali & berapa persen tiap ranking dipilih</p>
+      <p>PT. UNIFAM — Dari order yang <b>dikonfirmasi Tersedia</b> oleh ekspedisi</p>
     </div>
   </div>
 
   <div class="toolbar">
-    <div class="tabs">
-      <div class="tab on" id="t-laut" onclick="pilihJenis('laut')">🚢 Laut / Kontainer</div>
-      <div class="tab" id="t-darat" onclick="pilihJenis('darat')">🚛 Darat / Truck</div>
-    </div>
     <select id="f-bulan" onchange="render()"><option value="">— semua bulan —</option></select>
     <button class="btn" onclick="muat()">↻ Refresh</button>
+    <span class="mini" id="info"></span>
   </div>
 
   <div id="isi"><div class="loading">Menghitung porsi ranking…</div></div>
 
-  <p class="foot">PT. UNIFAM · Rank 1 = ekspedisi termurah untuk kota & tipe mobil itu</p>
+  <p class="foot">PT. UNIFAM · Rank 1 = ekspedisi termurah untuk kota &amp; tipe mobil itu</p>
 </div>
 
 <a href="https://nanodoang.github.io/Logistic-Transportation/" style="position:fixed;bottom:16px;left:16px;background:#fff;color:#0C447C;border:1px solid #BBD8F5;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:999;display:flex;align-items:center;gap:6px">← Portal Utama</a>
@@ -74,126 +74,162 @@ tr:last-child td{border-bottom:none}
 <script>
 const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
 let DATA=[];
-let JENIS='laut'; // 'laut' | 'darat'
+let RAW=null;
 
 function muat(){
   document.getElementById('isi').innerHTML='<div class="loading">Menghitung porsi ranking…</div>';
   const cb='cbRank'+Date.now();
   let selesai=false;
-  const to=setTimeout(()=>{ if(!selesai){ selesai=true; document.getElementById('isi').innerHTML='<div class="empty">Koneksi lambat, coba Refresh lagi</div>'; } },25000);
+  const to=setTimeout(function(){ if(!selesai){ selesai=true;
+    document.getElementById('isi').innerHTML='<div class="empty">Koneksi lambat — coba tekan Refresh lagi</div>'; } },25000);
   window[cb]=function(resp){
     if(selesai) return; selesai=true; clearTimeout(to);
     delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    RAW=resp;
     DATA=(resp&&resp.bulan)?resp.bulan:[];
     isiFilter(); render();
   };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?action=getrankstat&callback='+cb;
-  sc.onerror=function(){ if(selesai) return; selesai=true; clearTimeout(to); delete window[cb]; document.getElementById('isi').innerHTML='<div class="empty">Gagal memuat data</div>'; };
+  sc.onerror=function(){ if(selesai) return; selesai=true; clearTimeout(to); delete window[cb];
+    document.getElementById('isi').innerHTML='<div class="empty">Gagal memuat data — periksa koneksi atau deploy Code.gs</div>'; };
   document.body.appendChild(sc);
 }
 
-function pilihJenis(j){
-  JENIS=j;
-  document.getElementById('t-laut').classList.toggle('on', j==='laut');
-  document.getElementById('t-darat').classList.toggle('on', j==='darat');
-  isiFilter(); render();
-}
 const NAMA_BLN=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 function labelBulan(b){
   const p=String(b).split('-');
   if(p.length<2) return b;
-  return NAMA_BLN[parseInt(p[1],10)-1]+' '+p[0];
+  const idx=parseInt(p[1],10)-1;
+  return (NAMA_BLN[idx]||p[1])+' '+p[0];
 }
 function isiFilter(){
   const sel=document.getElementById('f-bulan');
   const kini=sel.value;
   sel.innerHTML='<option value="">— semua bulan —</option>'+
-    DATA.map(d=>`<option value="${d.bulan}" ${kini===d.bulan?'selected':''}>${labelBulan(d.bulan)} (${(d[JENIS]||{}).terhitung||0})</option>`).join('');
+    DATA.map(function(d){
+      const n=((d.laut&&d.laut.terhitung)||0)+((d.darat&&d.darat.terhitung)||0);
+      return '<option value="'+d.bulan+'"'+(kini===d.bulan?' selected':'')+'>'+labelBulan(d.bulan)+' ('+n+')</option>';
+    }).join('');
 }
 
 function barisRank(no,jml,persen,cls){
   const medal=['🥇','🥈','🥉','4️⃣','➕'][no-1]||'';
   const nama=no<=4?('Rank '+no):'Rank 5+';
-  return `<div class="rank-row">
-    <div class="rank-lbl"><span>${medal}</span><span>${nama}</span></div>
-    <div class="bar-wrap"><div class="bar ${cls}" style="width:${Math.max(persen,1.5)}%">${persen>=8?(persen+'%'):''}</div></div>
-    <div class="rank-num"><b>${jml}</b>× <span class="mini">${persen<8?(persen+'%'):''}</span></div>
-  </div>`;
+  return '<div class="rank-row">'+
+    '<div class="rank-lbl"><span>'+medal+'</span><span>'+nama+'</span></div>'+
+    '<div class="bar-wrap"><div class="bar '+cls+'" style="width:'+Math.max(persen,1.5)+'%">'+(persen>=10?(persen+'%'):'')+'</div></div>'+
+    '<div class="rank-num"><b>'+jml+'</b>× <span class="mini">'+(persen<10?(persen+'%'):'')+'</span></div>'+
+  '</div>';
 }
 
-function kartuBulan(row){
-  const d=row[JENIS]||{r1:0,r2:0,r3:0,r4:0,lain:0,p1:0,p2:0,p3:0,p4:0,pLain:0,terhitung:0,tanpaRate:0};
-  if(!d.terhitung && !d.tanpaRate) return '';
-  return `<div class="card">
-    <h2>${labelBulan(row.bulan)}</h2>
-    <div class="sub">${d.terhitung} order terhitung${d.tanpaRate?(' · '+d.tanpaRate+' tanpa data rate'):''}</div>
-    ${barisRank(1,d.r1,d.p1,'b1')}
-    ${barisRank(2,d.r2,d.p2,'b2')}
-    ${barisRank(3,d.r3,d.p3,'b3')}
-    ${barisRank(4,d.r4,d.p4,'b4')}
-    ${d.lain?barisRank(5,d.lain,d.pLain,'b5'):''}
-  </div>`;
+function kosong(){ return {r1:0,r2:0,r3:0,r4:0,lain:0,p1:0,p2:0,p3:0,p4:0,pLain:0,terhitung:0,tanpaRate:0,total:0}; }
+
+function jumlahkan(list, jenis){
+  const T=kosong();
+  list.forEach(function(row){
+    const d=(row&&row[jenis])||{};
+    T.r1+=d.r1||0; T.r2+=d.r2||0; T.r3+=d.r3||0; T.r4+=d.r4||0; T.lain+=d.lain||0;
+    T.terhitung+=d.terhitung||0; T.tanpaRate+=d.tanpaRate||0; T.total+=d.total||0;
+  });
+  const pct=function(n){ return T.terhitung?Math.round(n*1000/T.terhitung)/10:0; };
+  T.p1=pct(T.r1); T.p2=pct(T.r2); T.p3=pct(T.r3); T.p4=pct(T.r4); T.pLain=pct(T.lain);
+  return T;
+}
+
+function kartu(jenis, d, judul){
+  const cls = jenis==='laut' ? 'laut' : 'darat';
+  if(!d.terhitung && !d.tanpaRate && !d.total){
+    return '<div class="card '+cls+'"><h2>'+judul+'</h2>'+
+      '<div class="empty" style="padding:22px">Belum ada data</div></div>';
+  }
+  let s='<div class="card '+cls+'">'+
+    '<h2>'+judul+'</h2>'+
+    '<div class="sub">'+d.terhitung+' order terhitung'+(d.tanpaRate?(' · '+d.tanpaRate+' tanpa data rate'):'')+'</div>'+
+    '<div class="stat-row">'+
+      '<div class="stat"><div class="l">🥇 R1</div><div class="n" style="color:var(--teal)">'+d.p1+'%</div></div>'+
+      '<div class="stat"><div class="l">🥈 R2</div><div class="n" style="color:var(--blue)">'+d.p2+'%</div></div>'+
+      '<div class="stat"><div class="l">🥉 R3</div><div class="n" style="color:var(--amber)">'+d.p3+'%</div></div>'+
+      '<div class="stat"><div class="l">4️⃣ R4</div><div class="n" style="color:var(--purple)">'+d.p4+'%</div></div>'+
+    '</div>';
+  if(d.terhitung){
+    s+=barisRank(1,d.r1,d.p1,'b1')+barisRank(2,d.r2,d.p2,'b2')+
+       barisRank(3,d.r3,d.p3,'b3')+barisRank(4,d.r4,d.p4,'b4')+
+       (d.lain?barisRank(5,d.lain,d.pLain,'b5'):'');
+  }else{
+    s+='<div class="mini" style="text-align:center;padding:12px">Order ada, tapi rate-nya tidak ditemukan untuk dihitung ranking</div>';
+  }
+  return s+'</div>';
+}
+
+function tabelBulan(list, jenis, judul){
+  const ada = list.some(function(r){ return ((r[jenis]||{}).terhitung||0)>0; });
+  if(!ada) return '';
+  return '<div class="card"><h2>'+judul+'</h2><div class="sub">Jumlah order &amp; persentase tiap ranking</div>'+
+    '<div style="overflow-x:auto"><table><thead><tr><th>Bulan</th><th>Total</th><th>🥇 R1</th><th>🥈 R2</th><th>🥉 R3</th><th>4️⃣ R4</th><th>5+</th></tr></thead><tbody>'+
+    list.map(function(row){
+      const d=row[jenis]||{};
+      if(!(d.terhitung||0)) return '';
+      return '<tr><td style="font-weight:700">'+labelBulan(row.bulan)+'</td>'+
+        '<td>'+(d.terhitung||0)+'</td>'+
+        '<td style="color:var(--teal);font-weight:700">'+(d.r1||0)+'× <span class="mini">'+(d.p1||0)+'%</span></td>'+
+        '<td style="color:var(--blue);font-weight:700">'+(d.r2||0)+'× <span class="mini">'+(d.p2||0)+'%</span></td>'+
+        '<td style="color:var(--amber);font-weight:700">'+(d.r3||0)+'× <span class="mini">'+(d.p3||0)+'%</span></td>'+
+        '<td style="color:var(--purple);font-weight:700">'+(d.r4||0)+'× <span class="mini">'+(d.p4||0)+'%</span></td>'+
+        '<td class="mini">'+(d.lain||0)+'× '+(d.pLain||0)+'%</td></tr>';
+    }).join('')+
+    '</tbody></table></div></div>';
 }
 
 function render(){
-  const f=document.getElementById('f-bulan').value;
-  const list=f?DATA.filter(d=>d.bulan===f):DATA;
-  const adaData = list.some(row=>{const d=row[JENIS]||{}; return (d.terhitung||0)>0 || (d.tanpaRate||0)>0;});
-  if(!list.length || !adaData){
-    document.getElementById('isi').innerHTML='<div class="empty">Belum ada data '+(JENIS==='laut'?'laut/kontainer':'darat/truck')+' untuk dihitung</div>';
+  const isi=document.getElementById('isi');
+  if(!DATA.length){
+    let pesan='<div class="empty">Belum ada data order untuk dihitung</div>';
+    if(RAW && RAW.status==='ok'){
+      pesan+='<div class="diag"><b>Kemungkinan penyebab:</b><br>'+
+        '• Code.gs terbaru belum di-deploy (endpoint getrankstat)<br>'+
+        '• Belum ada konfirmasi berstatus Tersedia<br>'+
+        '• Kolom rate tidak terbaca (Expedition / Vehicle Type / Description / Price)</div>';
+    }
+    isi.innerHTML=pesan;
+    document.getElementById('info').textContent='';
     return;
   }
-  // ringkasan total (semua bulan yang tampil)
-  const T={r1:0,r2:0,r3:0,r4:0,lain:0,terhitung:0,tanpaRate:0};
-  list.forEach(row=>{ const d=row[JENIS]||{}; T.r1+=d.r1||0;T.r2+=d.r2||0;T.r3+=d.r3||0;T.r4+=d.r4||0;T.lain+=d.lain||0;T.terhitung+=d.terhitung||0;T.tanpaRate+=d.tanpaRate||0; });
-  const pct=n=>T.terhitung?Math.round(n*1000/T.terhitung)/10:0;
+  const f=document.getElementById('f-bulan').value;
+  const list=f?DATA.filter(function(d){ return d.bulan===f; }):DATA;
 
-  let html=`<div class="stat-row">
-    <div class="stat"><div class="l">Total Order</div><div class="n" style="color:var(--navy)">${T.terhitung}</div></div>
-    <div class="stat"><div class="l">🥇 Rank 1</div><div class="n" style="color:var(--teal)">${pct(T.r1)}%</div></div>
-    <div class="stat"><div class="l">🥈 Rank 2</div><div class="n" style="color:#3B82F6">${pct(T.r2)}%</div></div>
-    <div class="stat"><div class="l">🥉 Rank 3</div><div class="n" style="color:var(--amber)">${pct(T.r3)}%</div></div>
-    <div class="stat"><div class="l">4️⃣ Rank 4</div><div class="n" style="color:var(--purple)">${pct(T.r4)}%</div></div>
-  </div>`;
+  const TL=jumlahkan(list,'laut');
+  const TD=jumlahkan(list,'darat');
+  document.getElementById('info').textContent=
+    'Laut '+TL.terhitung+' order · Darat '+TD.terhitung+' order';
 
-  if(!f){
-    html+=`<div class="card">
-      <h2>${JENIS==='laut'?'🚢 Laut / Kontainer':'🚛 Darat / Truck'} — Total</h2>
-      <div class="sub">${T.terhitung} order terhitung${T.tanpaRate?(' · '+T.tanpaRate+' tanpa data rate'):''}</div>
-      ${barisRank(1,T.r1,pct(T.r1),'b1')}
-      ${barisRank(2,T.r2,pct(T.r2),'b2')}
-      ${barisRank(3,T.r3,pct(T.r3),'b3')}
-      ${barisRank(4,T.r4,pct(T.r4),'b4')}
-      ${T.lain?barisRank(5,T.lain,pct(T.lain),'b5'):''}
-    </div>`;
+  let html='<div class="sec-lbl">Total'+(f?(' — '+labelBulan(f)):' Keseluruhan')+'</div>'+
+    '<div class="dua">'+
+      kartu('laut',TL,'🚢 Laut / Kontainer')+
+      kartu('darat',TD,'🚛 Darat / Truck')+
+    '</div>';
+
+  if(!f && DATA.length>1){
+    html+='<div class="sec-lbl">Rincian per Bulan</div>';
+    DATA.forEach(function(row){
+      const l=row.laut||kosong(), dr=row.darat||kosong();
+      if(!l.terhitung && !dr.terhitung && !l.tanpaRate && !dr.tanpaRate) return;
+      html+='<div style="margin-bottom:6px;font-size:12.5px;font-weight:800;color:var(--muted)">'+labelBulan(row.bulan)+'</div>'+
+        '<div class="dua" style="margin-bottom:14px">'+
+          kartu('laut',l,'🚢 Laut')+
+          kartu('darat',dr,'🚛 Darat')+
+        '</div>';
+    });
+    html+='<div class="sec-lbl">Tabel Ringkas</div>'+
+      tabelBulan(DATA,'laut','🚢 Laut / Kontainer per Bulan')+
+      tabelBulan(DATA,'darat','🚛 Darat / Truck per Bulan');
   }
 
-  html+=list.map(kartuBulan).join('');
+  html+='<div class="note">💡 <b>Rank 1</b> = ekspedisi termurah untuk kota &amp; tipe itu. '+
+    '<b>Laut</b> = 20 FT / 20 FT C / 40 FT · <b>Darat</b> = FUSO, CD, TRONTON, WINGBOX. '+
+    'Dihitung dari konfirmasi <b>Tersedia</b>, bulan dari <b>Tgl Muat</b>. Makin besar porsi Rank 1, makin hemat.</div>';
 
-  // tabel ringkas per bulan
-  if(list.length>1){
-    html+=`<div class="card">
-      <h2>Ringkasan per Bulan</h2>
-      <div class="sub">Jumlah order & persentase tiap ranking</div>
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>Bulan</th><th>Total</th><th>🥇 R1</th><th>🥈 R2</th><th>🥉 R3</th><th>4️⃣ R4</th><th>5+</th></tr></thead>
-        <tbody>${list.map(row=>{const d=row[JENIS]||{};return `<tr>
-          <td style="font-weight:700">${labelBulan(row.bulan)}</td>
-          <td>${d.terhitung||0}</td>
-          <td style="color:var(--teal);font-weight:700">${d.r1||0}× <span class="mini">${d.p1||0}%</span></td>
-          <td style="color:#3B82F6;font-weight:700">${d.r2||0}× <span class="mini">${d.p2||0}%</span></td>
-          <td style="color:var(--amber);font-weight:700">${d.r3||0}× <span class="mini">${d.p3||0}%</span></td>
-          <td style="color:var(--purple);font-weight:700">${d.r4||0}× <span class="mini">${d.p4||0}%</span></td>
-          <td class="mini">${d.lain||0}× ${d.pLain||0}%</td>
-        </tr>`}).join('')}</tbody>
-      </table></div>
-    </div>`;
-  }
-
-  html+=`<div class="note">💡 <b>Rank 1</b> = ekspedisi termurah untuk kota & tipe itu. Data dipisah: <b>Laut</b> (20 FT / 20 FT C / 40 FT) dan <b>Darat</b> (FUSO, CD, TRONTON, WINGBOX). Makin besar porsi Rank 1, makin hemat.</div>`;
-
-  document.getElementById('isi').innerHTML=html;
+  isi.innerHTML=html;
 }
 
 muat();
