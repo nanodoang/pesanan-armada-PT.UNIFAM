@@ -1438,11 +1438,12 @@ let currentBatch=null;
 function buildPesan(eksp){
   // ambil order untuk ekspedisi ini: sbg leg darat ATAU leg laut
   const items=rows.filter(r=> r.pilihEksp===eksp || (r.multiLeg && r.eksp2===eksp));
-  const noOrd=buatNoOrder();
   const tglShow=r=> r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText);
   let lines='';
   let adaNonRank1=false;
   let catatanApprove='';
+  const noOrderSet=[]; // kumpulan No Order (draft_id) untuk link
+  const pushNo=id=>{ if(id && noOrderSet.indexOf(id)<0) noOrderSet.push(id); };
 
   // pisahkan: multi-drop grup vs item tunggal
   const grupMap={}; const single=[];
@@ -1452,25 +1453,27 @@ function buildPesan(eksp){
   });
 
   let no=0;
-  // item tunggal
+  // item tunggal — tiap tujuan No Order sendiri (dari draft_id)
   single.forEach(r=>{
     no++;
+    const noItem = r.draft_id || r.noOrder || buatNoOrder();
+    pushNo(noItem);
     // MULTI LEG: tampilkan sesuai leg untuk ekspedisi ini, TANPA jam muat
     if(r.multiLeg){
       const legDarat = (r.pilihEksp===eksp);
       if(legDarat){
-        lines += no+'. '+(r.tuj)+'\n'+
+        lines += no+'. ['+noItem+'] '+(r.tuj)+'\n'+
                  '   🔗 LEG 1 (DARAT) → '+(r.pelabuhan||'-')+'\n'+
                  '   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n'+
                  '   🚛 '+(r.tipe||'-')+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
       }else{
-        lines += no+'. '+(r.tuj)+'\n'+
+        lines += no+'. ['+noItem+'] '+(r.tuj)+'\n'+
                  '   🔗 LEG 2 (LAUT) dari '+(r.pelabuhan||'-')+'\n'+
                  '   🚢 '+(r.tipe2||'-')+(isKontainer(r.tipe2)?(' — '+rupiah(r.harga2)):'')+'\n';
       }
       return;
     }
-    lines += no+'. '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
+    lines += no+'. ['+noItem+'] '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
       const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
@@ -1486,16 +1489,18 @@ function buildPesan(eksp){
     }
   });
 
-  // grup multi-drop: harga = rate tertinggi + biaya drop
+  // grup multi-drop: 1 No Order (dari tujuan pertama grup)
   Object.keys(grupMap).forEach(gid=>{
     no++;
     const g=grupMap[gid];
+    const noGrup = g[0].draft_id || g[0].noOrder || buatNoOrder();
+    pushNo(noGrup);
     const rateTertinggi = Math.max(...g.map(x=>x.pilihHarga||0));
     const biayaDrop = g[0].biayaDrop || 0;
     const totalDrop = rateTertinggi + biayaDrop;
     const tujList = g.map(x=>x.tuj).join(' → ');
     const kontainer = isKontainer(g[0].tipe);
-    lines += no+'. 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
+    lines += no+'. ['+noGrup+'] 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
              '   🗓️ Muat: '+tglShow(g[0])+', jam '+(tampilJam(g[0].jam)||'-')+'\n'+
              '   🚛 '+g[0].tipe+'\n'+
              '   Rute: '+tujList+'\n'+
@@ -1534,13 +1539,14 @@ function buildPesan(eksp){
     }
   });
 
-  const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrd)+
+  const noOrdGabung = noOrderSet.join(',');
+  const link = KONFIRM_URL+'?order='+encodeURIComponent(noOrdGabung)+
     '&eksp='+encodeURIComponent(eksp)+
     '&hp_eksp='+encodeURIComponent(kontakEksp(eksp))+
     '&admins='+encodeURIComponent(ADMINS);
 
   // PESAN 1: ke ekspedisi (tanpa approve)
-  let msg='*ORDER ARMADA - PT. UNIFAM*\nNo: *'+noOrd+'* | Eksp: *'+eksp+'*\n\n'+lines;
+  let msg='*ORDER ARMADA - PT. UNIFAM*\nEksp: *'+eksp+'*\n\n'+lines;
   msg += '\nKonfirmasi: '+link;
 
   // PESAN 2: approve ke management (hanya jika ada non-rank1)
@@ -1553,7 +1559,7 @@ function buildPesan(eksp){
     const grupSeen={};
     items.forEach(r=>{ if(r.dropGroup && !grupSeen[r.dropGroup]){ grupSeen[r.dropGroup]=1; totalBiaya += (r.biayaDrop||0); } });
 
-    msgApprove='*PERMINTAAN APPROVAL - PT. UNIFAM*\nNo Order: *'+noOrd+'*\nEkspedisi: *'+eksp+'*\n\n'+
+    msgApprove='*PERMINTAAN APPROVAL - PT. UNIFAM*\nNo Order: *'+noOrdGabung+'*\nEkspedisi: *'+eksp+'*\n\n'+
       'Mohon persetujuan. Order berikut menggunakan ekspedisi *selain rate termurah* karena armada termurah sedang tidak tersedia:\n\n'+
       catatanApprove+
       '\n──────────────\n'+
@@ -1594,12 +1600,13 @@ function buildPesan(eksp){
     // multi leg: harga = darat + laut (di baris yang sama)
     if(r.multiLeg) hargaSimpan = (r.pilihHarga||0) + (r.harga2||0);
     return {
+      no_order: r.draft_id || r.noOrder || '',
       tgl: tglShow(r), jam:r.jam||'', tuj:r.tuj, tipe:r.tipe, kode:eksp,
       kubik: r.kubik||'', harga: hargaSimpan,
       sales: r.sales||'', total: r.total||''
     };
   });
-  currentBatch={ noOrd, eksp, msg, msgApprove, orderRows, items };
+  currentBatch={ noOrd: noOrdGabung, eksp, msg, msgApprove, orderRows, items };
 }
 
 // kirim WA approve ke grup management (kontak dipilih manual)
