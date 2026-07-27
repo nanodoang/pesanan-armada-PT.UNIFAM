@@ -73,7 +73,7 @@ tr:last-child td{border-bottom:none}
     </table>
   </div>
 
-  <p class="foot">PT. UNIFAM · History semua order</p>
+  <p class="foot">PT. UNIFAM · History semua order · v2</p>
 </div>
 
 <script>
@@ -153,7 +153,7 @@ function render(){
       <td><span class="eksp">${esc(d.ekspedisi)||'-'}</span></td>
       <td>${esc(d.tipe)||'-'}</td>
       <td>${esc(d.sopir)||'-'}</td>
-      <td class="mono">${d.hp?('<a href="https://wa.me/'+String(d.hp).replace(/[^0-9]/g,'').replace(/^0/,'62')+'" target="_blank" style="color:#1D9E75;text-decoration:none;font-weight:700">'+esc(d.hp)+'</a>'):'-'}</td>
+      <td class="mono">${d.hp?('<a href="https://wa.me/'+hpWA(d.hp)+'" target="_blank" style="color:#1D9E75;text-decoration:none;font-weight:700">'+esc(hpTampil(d.hp))+'</a>'):'-'}</td>
       <td class="mono">${esc(d.nopol)||'-'}</td>
       <td class="mono">${esc(d.kontainer)||'-'}</td>
       <td style="white-space:nowrap">${esc(d.eta)||esc(d.est_tiba)||'-'}</td>
@@ -163,6 +163,23 @@ function render(){
   }).join('');
 }
 function esc(s){return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+// No HP: format tampil 08xxx, format WA 62xxx (terima +628, 628, 08, 8)
+function hpWA(hp){
+  let s=String(hp||'').replace(/[^\d]/g,'');
+  if(!s) return '';
+  if(s.indexOf('62')===0) return s;
+  if(s.indexOf('0')===0)  return '62'+s.slice(1);
+  if(s.indexOf('8')===0)  return '62'+s;
+  return s;
+}
+function hpTampil(hp){
+  let s=String(hp||'').replace(/[^\d]/g,'');
+  if(!s) return '';
+  if(s.indexOf('62')===0) s='0'+s.slice(2); // 62xxx → 0xxx
+  else if(s.indexOf('8')===0) s='0'+s;      // 8xxx  → 08xxx
+  // sisipkan spasi tiap 4 digit biar mudah dibaca
+  return s.replace(/(\d{4})(?=\d)/g,'$1 ').trim();
+}
 
 muat();
 </script>
