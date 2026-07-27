@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v73</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v74</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1462,18 +1462,18 @@ function buildPesan(eksp){
     if(r.multiLeg){
       const legDarat = (r.pilihEksp===eksp);
       if(legDarat){
-        lines += no+'. ['+noItem+'] '+(r.tuj)+'\n'+
+        lines += no+'. 📦 '+noItem+'\n   🎯 '+(r.tuj)+'\n'+
                  '   🔗 LEG 1 (DARAT) → '+(r.pelabuhan||'-')+'\n'+
                  '   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n'+
                  '   🚛 '+(r.tipe||'-')+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
       }else{
-        lines += no+'. ['+noItem+'] '+(r.tuj)+'\n'+
+        lines += no+'. 📦 '+noItem+'\n   🎯 '+(r.tuj)+'\n'+
                  '   🔗 LEG 2 (LAUT) dari '+(r.pelabuhan||'-')+'\n'+
                  '   🚢 '+(r.tipe2||'-')+(isKontainer(r.tipe2)?(' — '+rupiah(r.harga2)):'')+'\n';
       }
       return;
     }
-    lines += no+'. ['+noItem+'] '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
+    lines += no+'. 📦 '+noItem+'\n   🎯 '+(r.tuj)+'\n   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n   🚛 '+r.tipe+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
     const rank = (r.tuj && r.tipe && hargaData.length) ? getRanking(r.tuj, r.tipe) : [];
     if(rank.length){
       const posisi = rank.findIndex(h=>norm(h.expedition)===norm(eksp));
@@ -1500,7 +1500,7 @@ function buildPesan(eksp){
     const totalDrop = rateTertinggi + biayaDrop;
     const tujList = g.map(x=>x.tuj).join(' → ');
     const kontainer = isKontainer(g[0].tipe);
-    lines += no+'. ['+noGrup+'] 🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
+    lines += no+'. 📦 '+noGrup+'\n   🚚 *MULTI-DROP* ('+g.length+' tujuan)\n'+
              '   🗓️ Muat: '+tglShow(g[0])+', jam '+(tampilJam(g[0].jam)||'-')+'\n'+
              '   🚛 '+g[0].tipe+'\n'+
              '   Rute: '+tujList+'\n'+
@@ -1669,8 +1669,11 @@ function kontakEksp(eksp){
   if(!eksp) return '';
   const hit = hargaData.find(h=> norm(h.expedition)===norm(eksp) && h.kontak);
   if(!hit) return '';
-  let n = String(hit.kontak).replace(/\D/g,'');
-  if(n.indexOf('0')===0) n='62'+n.slice(1);
+  let n = String(hit.kontak).replace(/[^\d]/g,''); // buang +, spasi, strip
+  if(!n) return '';
+  if(n.indexOf('62')===0) return n;
+  if(n.indexOf('0')===0)  return '62'+n.slice(1);
+  if(n.indexOf('8')===0)  return '62'+n;
   return n;
 }
 
