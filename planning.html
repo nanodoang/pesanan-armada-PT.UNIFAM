@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v75</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v76</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -749,9 +749,29 @@ function jamOptions(sel){
   return opt;
 }
 
-// Opsi jenis truck (pilih manual)
+// Opsi jenis truck (pilih manual). Daftar bawaan + tipe dari sheet rate (otomatis).
+const TRUCK_BAWAAN = ['20 FT','20 FT C','40 FT','FUSO 48','FUSO 46','FUSO 45','FUSO 36','FUSO 32','FUSO 27','FUSO 24','TRONTON 70','TRONTON 60','WINGBOX','CD 17','CD 20','CD 24'];
+// peta nama vtype rate → label truck (kontainer)
+function vtypeKeTruck(v){
+  const n=norm(v);
+  if(n.indexOf('kontainer-20" 32 (c)')>=0 || n==='kontainer-20" 32 (c)') return '20 FT C';
+  if(n.indexOf('kontainer-20"')>=0) return '20 FT';
+  if(n.indexOf('kontainer-40"')>=0) return '40 FT';
+  return String(v||'').trim(); // darat: pakai apa adanya (FUSO 32, CD 24, dst)
+}
+function daftarTruck(){
+  const set = TRUCK_BAWAAN.slice();
+  // tambahkan tipe dari data rate yang belum ada di daftar bawaan
+  (hargaData||[]).forEach(h=>{
+    const t = vtypeKeTruck(h.vtype);
+    if(t && set.indexOf(t)<0) set.push(t);
+  });
+  return set;
+}
 function truckOptions(sel){
-  const list=['20 FT','20 FT C','40 FT','FUSO 48','FUSO 46','FUSO 45','FUSO 36','FUSO 32','FUSO 27','FUSO 24','TRONTON 70','TRONTON 60','WINGBOX','CD 17','CD 20'];
+  const list=daftarTruck();
+  // kalau nilai terpilih tak ada di daftar (tipe lama), tetap tampilkan
+  if(sel && list.indexOf(sel)<0) list.push(sel);
   let opt='<option value="">-- pilih --</option>';
   list.forEach(t=>{ opt+=`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`; });
   return opt;
@@ -775,7 +795,8 @@ function normalizeTipe(t){
     'tronton 70':'TRONTON 70','tronton70':'TRONTON 70','tronton 60':'TRONTON 60','tronton60':'TRONTON 60','tronton':'TRONTON 70',
     'wingbox':'WINGBOX','wing box':'WINGBOX',
     'cd 17':'CD 17','cd17':'CD 17',
-    'cd 20':'CD 20','cd20':'CD 20'
+    'cd 20':'CD 20','cd20':'CD 20',
+    'cd 24':'CD 24','cd24':'CD 24'
   };
   return map[n] || t; // kalau tak dikenali, pakai apa adanya
 }
