@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v80</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v81</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -337,6 +337,16 @@ function tampilJam(raw){
     return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
   }
   return s;
+}
+// konversi tanggal (format apa pun) → "yyyy-mm-dd" untuk <input type="date">
+function tglKeInputDate(raw){
+  if(raw==null || raw==='') return '';
+  const s=String(raw).trim();
+  let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  const d=new Date(s);
+  if(!isNaN(d.getTime())) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return '';
 }
 function tampilTgl(raw){
   if(raw==null || raw==='') return '-';
@@ -1015,8 +1025,16 @@ function simpanDraft(){ /* no-op: draft kini di Sheet */ }
 function updateDraftField(r, field){
   if(!r || !r.draft_id) return;
   const val = r[field]!=null ? r[field] : '';
+  const idLama = r.draft_id;
   gasJSONP('action=updatedraft&draft_id='+encodeURIComponent(r.draft_id)+
-           '&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(val));
+           '&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(val),
+    function(resp){
+      // kalau server bikin No Order baru (draft PENDING diisi tanggal), pakai yang baru
+      if(resp && resp.draft_id_baru && r.draft_id===idLama){
+        r.draft_id = resp.draft_id_baru;
+        renderRows();
+      }
+    });
 }
 // ==== FILTER TANGGAL ====
 let filterTgl = '';
@@ -1117,6 +1135,10 @@ function renderCards(){
     const kartonInfo = r.total ? (' · '+r.total+' krt') : (r.kubik?(' · '+r.kubik+' m³'):'');
     const jamInfo = tampilJam(r.jam) ? (', '+tampilJam(r.jam)) : '';
     const metaTgl = (r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText));
+    const belumAdaTgl = r.isDraft && !r.tgl && !r.tglText;
+    const tglInputHTML = r.isDraft
+      ? `<input type="date" value="${tglKeInputDate(r.tgl||r.tglText)}" onchange="setField(${r.id},'tgl',this.value)" style="border:1px solid ${belumAdaTgl?'#DC2626':'var(--border)'};border-radius:6px;padding:3px 6px;font-size:11.5px;font-family:inherit;${belumAdaTgl?'background:#FEF2F2':''}">`
+      : metaTgl;
 
     // ==== BAGIAN RATE ====
     let rateHtml='';
@@ -1178,7 +1200,7 @@ function renderCards(){
         <input type="checkbox" class="oc-chk" ${checked} onchange="toggleCheck(${r.id},this.checked)">
         <div style="flex:1;min-width:0">
           <div class="oc-tuj">${r.tuj||'<span class="tbl-na">(belum diisi)</span>'}</div>
-          <div class="oc-meta">🗓️ ${metaTgl}${jamInfo}${kartonInfo}</div>
+          <div class="oc-meta">🗓️ ${tglInputHTML}${belumAdaTgl?' <span style="color:#DC2626;font-weight:700">⚠️ isi tanggal</span>':''}${jamInfo}${kartonInfo}</div>
         </div>
         ${badge}
         <button class="btn-hapus" onclick="delRow(${r.id})" style="flex-shrink:0">🗑️</button>
@@ -1290,7 +1312,7 @@ function renderTable(){
         <td class="tbl-rownum">${i+1}</td>
         <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
         <td>${badge}${dropBadge}</td>
-        <td>${r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText)}</td>
+        <td>${r.isDraft?('<input type="date" value="'+tglKeInputDate(r.tgl||r.tglText)+'" onchange="setField('+r.id+',\'tgl\',this.value)" style="border:1px solid '+((!r.tgl&&!r.tglText)?"#DC2626":"var(--border)")+';border-radius:6px;padding:3px 5px;font-size:11.5px;font-family:inherit;'+((!r.tgl&&!r.tglText)?"background:#FEF2F2":"")+'">'):(r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText))}</td>
         <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
         <td class="cell-dest">${dest}<br><span style="font-size:9px;color:#B45309;font-weight:800">LEG 1 → </span><select onchange="setPelabuhan(${r.id},this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">${opsiPel}</select></td>
         <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
@@ -1335,7 +1357,7 @@ function renderTable(){
       <td class="tbl-rownum">${i+1}</td>
       <td><button class="btn-hapus" onclick="delRow(${r.id})" title="Hapus">🗑️</button></td>
       <td>${badge}${dropBadge}</td>
-      <td>${r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText)}</td>
+      <td>${r.isDraft?('<input type="date" value="'+tglKeInputDate(r.tgl||r.tglText)+'" onchange="setField('+r.id+',\'tgl\',this.value)" style="border:1px solid '+((!r.tgl&&!r.tglText)?"#DC2626":"var(--border)")+';border-radius:6px;padding:3px 5px;font-size:11.5px;font-family:inherit;'+((!r.tgl&&!r.tglText)?"background:#FEF2F2":"")+'">'):(r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText))}</td>
       <td><select class="jam-sel" onchange="setField(${r.id},'jam',this.value)">${jamOptions(r.jam)}</select></td>
       <td class="cell-dest">${dest}</td>
       <td>${r.kubik||'<span class="tbl-na">-</span>'}</td>
@@ -1460,6 +1482,13 @@ let currentBatch=null;
 function buildPesan(eksp){
   // ambil order untuk ekspedisi ini: sbg leg darat ATAU leg laut
   const items=rows.filter(r=> r.pilihEksp===eksp || (r.multiLeg && r.eksp2===eksp));
+  // cegah kirim kalau ada tujuan yg tanggalnya belum diisi (No Order masih PENDING)
+  const belumIsiTgl = items.filter(r=> r.draft_id && r.draft_id.indexOf('PENDING')===0);
+  if(belumIsiTgl.length){
+    toast('Isi tanggal muat dulu untuk: '+belumIsiTgl.map(r=>r.tuj).join(', '),'err');
+    currentBatch=null;
+    return;
+  }
   const tglShow=r=> r.tgl?tampilTgl(r.tgl):tampilTgl(r.tglText);
   let lines='';
   let adaNonRank1=false;
