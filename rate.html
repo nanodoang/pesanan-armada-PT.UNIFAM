@@ -123,6 +123,8 @@ function pilihTab(t){
   });
 }
 function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+// kosong DAN "CIKANDE" dianggap SAMA (default/langsung)
+function normAsal(a){ const s=String(a||'').toLowerCase().replace(/[^a-z0-9]/g,''); return (!s||s==='cikande')?'':s; }
 function esc(s){ return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 function rupiah(n){ return 'Rp '+(Number(n)||0).toLocaleString('id-ID'); }
 function toNumber(v){
@@ -188,7 +190,7 @@ function prosesMatrix(rws, dariSheet){
   const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
   let iE=idx(['expedition','ekspedisi','vendor']);
   let iT=idx(['vehicle','tipe','type','jenis','truck']);
-  let iK=idx(['description','tujuan','kota','city','delivery']);
+  let iK=idx(['destination','description','tujuan','kota','city','delivery']);
   let iP=idx(['price','harga','rate']);
   let iA=idx(['asal','origin','dari','ship point']); // opsional: kosong = default (langsung)
   let start=1;
@@ -241,7 +243,7 @@ function render(){
   }
   // kelompokkan per kota+tipe+asal (rate langsung vs rate leg-2 dari pelabuhan TIDAK dicampur)
   const grup={};
-  data.forEach(r=>{ const k=r.kota+'|'+norm(r.tipe)+'|'+norm(r.asal||''); (grup[k]=grup[k]||[]).push(r); });
+  data.forEach(r=>{ const k=r.kota+'|'+norm(r.tipe)+'|'+normAsal(r.asal); (grup[k]=grup[k]||[]).push(r); });
   const medal=['🥇','🥈','🥉'];
   let html='';
   Object.keys(grup).sort().forEach(k=>{
@@ -253,7 +255,7 @@ function render(){
         <td class="rank">${i<3?`<span class="medal">${medal[i]}</span>`:(i+1)}</td>
         <td class="kota">${esc(r.kota.toUpperCase())}</td>
         <td>${esc(r.tipe)||'-'}</td>
-        <td>${r.asal?('<span class="badge" style="background:#EDE9FE;color:#5B21B6">dari '+esc(r.asal.toUpperCase())+'</span>'):'<span class="mono" style="color:var(--muted)">langsung</span>'}</td>
+        <td>${normAsal(r.asal)?('<span class="badge" style="background:#EDE9FE;color:#5B21B6">dari '+esc(r.asal.toUpperCase())+'</span>'):'<span class="mono" style="color:var(--muted)">langsung (Cikande)</span>'}</td>
         <td class="eksp">${esc(r.eksp)||'-'}</td>
         <td class="rate">${rupiah(r.harga)}</td>
         <td>${i===0?'<span class="badge" style="background:#DCFCE7;color:#15803D">termurah</span>':('<span class="sel">+'+rupiah(selisih)+'</span>')}</td>

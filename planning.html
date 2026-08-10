@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v86</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v88</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -386,7 +386,7 @@ function prosesRate(rws){
   const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
   const iV=idx(['vehicle','tipe','jenis']);
   // kolom tujuan: Description / Delivery Name / Tujuan / Kota
-  let iD=idx(['description','tujuan','kota','city']);
+  let iD=idx(['destination','description','tujuan','kota','city']);
   if(iD<0) iD=idx(['delivery','dist']);
   const iP=idx(['price','harga','rate']);
   const iE=idx(['expedition','ekspedisi','vendor']);
@@ -598,8 +598,12 @@ function extractKota(tujuan){
 }
 
 // Cari semua ekspedisi untuk tujuan + tipe (+ asal opsional), urut termurah.
-// asal kosong/undefined → cocokkan rate yg Asal-nya JUGA kosong (default/langsung).
-// asal diisi (mis. 'SURABAYA') → cocokkan rate yg Asal-nya SAMA (khusus leg tsb).
+// asal kosong/undefined ATAU "CIKANDE" → dianggap SAMA (default/langsung).
+// asal diisi nama pelabuhan lain (mis. 'SURABAYA','MOJOSARI') → cocokkan yg SAMA persis.
+function normAsal(a){
+  const s=String(a||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  return (!s || s==='cikande') ? '' : s; // kosong & cikande disamakan
+}
 function getRanking(tujuan, tipe, asal){
   if(!hargaData.length || !tujuan) return [];
   const kota = extractKota(tujuan);
@@ -608,15 +612,15 @@ function getRanking(tujuan, tipe, asal){
   const vNS = noSpace(v);
   const kotaNS = noSpace(kota);
   if(!kotaNS) return [];
-  const asalNS = noSpace(asal||'');
+  const asalNS = normAsal(asal);
   // cocok KOTA vs KOTA, harus SAMA PERSIS (abaikan spasi/tanda baca)
   // "PT. A - BALIKPAPAN" & "PT. B - BALIKPAPAN" → sama; kota beda → tidak tertukar
   const destMatch = h => {
     const dKotaNS = noSpace(extractKota(h.dest));
     return dKotaNS && dKotaNS===kotaNS;
   };
-  // cocok ASAL: kosong ketemu kosong, isi ketemu isi yg sama (tak tertukar antar rute)
-  const asalMatch = h => noSpace(h.asal||'') === asalNS;
+  // cocok ASAL: kosong/CIKANDE ketemu kosong/CIKANDE, isi lain ketemu yg sama (tak tertukar antar rute)
+  const asalMatch = h => normAsal(h.asal) === asalNS;
   // cocok tipe: PERSIS dulu (biar 20 FT tak nyangkut ke 20 FT C / combo)
   const pilihCombo = /c$/.test(vNS) || /\(c\)/.test(v);
   const vtypeMatch = h => {
