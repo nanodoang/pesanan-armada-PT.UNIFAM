@@ -190,7 +190,7 @@ function prosesMatrix(rws, dariSheet){
   const idx=names=>head.findIndex(h=>names.some(n=>h.includes(n)));
   let iE=idx(['expedition','ekspedisi','vendor']);
   let iT=idx(['vehicle','tipe','type','jenis','truck']);
-  let iK=idx(['destination','description','tujuan','kota','city','delivery']);
+  let iK=idx(['description','tujuan','kota','city','delivery']);
   let iP=idx(['price','harga','rate']);
   let iA=idx(['asal','origin','dari','ship point']); // opsional: kosong = default (langsung)
   let start=1;
