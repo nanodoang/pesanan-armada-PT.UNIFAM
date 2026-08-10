@@ -71,7 +71,7 @@ tr:last-child td{border-bottom:none}
     </div>
 
     <div id="p-paste" style="display:none">
-      <p class="hint">Paste data rate (dari Excel/Sheet). Kolom: <b>Ekspedisi | Tipe | Kota | Harga</b> — urutan bebas kalau ada header.</p>
+      <p class="hint">Paste data rate (dari Excel/Sheet). Kolom: <b>Ekspedisi | Tipe | Kota | Harga | Asal (opsional)</b> — urutan bebas kalau ada header. Kolom <b>Asal</b> cuma diisi untuk rate LEG 2 multi-leg (mis. "SURABAYA"); kosongkan untuk rate langsung.</p>
       <textarea id="paste-box" placeholder="VOLT	FUSO 32	SURABAYA	2300000&#10;SCB	Kontainer-20&quot; 32	MANADO	21000000"></textarea>
       <button class="btn" onclick="prosesPaste()">Proses Data</button>
     </div>
@@ -103,7 +103,7 @@ tr:last-child td{border-bottom:none}
   <div class="tbl-card">
     <table>
       <thead>
-        <tr><th class="rank">#</th><th>Kota</th><th>Tipe Mobil</th><th>Ekspedisi</th><th>Rate</th><th>Selisih vs Rank 1</th></tr>
+        <tr><th class="rank">#</th><th>Kota</th><th>Tipe Mobil</th><th>Asal</th><th>Ekspedisi</th><th>Rate</th><th>Selisih vs Rank 1</th></tr>
       </thead>
       <tbody id="body"><tr><td colspan="6" class="empty">Muat data rate dulu</td></tr></tbody>
     </table>
@@ -190,9 +190,10 @@ function prosesMatrix(rws, dariSheet){
   let iT=idx(['vehicle','tipe','type','jenis','truck']);
   let iK=idx(['description','tujuan','kota','city','delivery']);
   let iP=idx(['price','harga','rate']);
+  let iA=idx(['asal','origin','dari','ship point']); // opsional: kosong = default (langsung)
   let start=1;
-  // tanpa header → pakai urutan default: eksp, tipe, kota, harga
-  if(iE<0 && iT<0 && iK<0 && iP<0){ iE=0; iT=1; iK=2; iP=3; start=0; }
+  // tanpa header → pakai urutan default: eksp, tipe, kota, harga, (asal opsional kol.5)
+  if(iE<0 && iT<0 && iK<0 && iP<0){ iE=0; iT=1; iK=2; iP=3; iA=4; start=0; }
   RATE=[];
   for(let i=start;i<rws.length;i++){
     const r=rws[i]; if(!r||r.length<2) continue;
@@ -204,7 +205,8 @@ function prosesMatrix(rws, dariSheet){
       tipe: String(iT>=0?(r[iT]||''):'').trim(),
       kotaRaw: kotaRaw,
       kota: extractKota(kotaRaw),
-      harga: harga
+      harga: harga,
+      asal: iA>=0 ? String(r[iA]||'').trim() : ''
     });
   }
   setStatus(RATE.length?('✓ '+RATE.length+' rate dimuat'):'⚠️ Tidak ada rate valid');
@@ -234,12 +236,12 @@ function render(){
   });
   document.getElementById('count').textContent=data.length+' rate';
   if(!data.length){
-    document.getElementById('body').innerHTML='<tr><td colspan="6" class="empty">Tidak ada rate yang cocok</td></tr>';
+    document.getElementById('body').innerHTML='<tr><td colspan="7" class="empty">Tidak ada rate yang cocok</td></tr>';
     return;
   }
-  // kelompokkan per kota+tipe
+  // kelompokkan per kota+tipe+asal (rate langsung vs rate leg-2 dari pelabuhan TIDAK dicampur)
   const grup={};
-  data.forEach(r=>{ const k=r.kota+'|'+norm(r.tipe); (grup[k]=grup[k]||[]).push(r); });
+  data.forEach(r=>{ const k=r.kota+'|'+norm(r.tipe)+'|'+norm(r.asal||''); (grup[k]=grup[k]||[]).push(r); });
   const medal=['🥇','🥈','🥉'];
   let html='';
   Object.keys(grup).sort().forEach(k=>{
@@ -251,6 +253,7 @@ function render(){
         <td class="rank">${i<3?`<span class="medal">${medal[i]}</span>`:(i+1)}</td>
         <td class="kota">${esc(r.kota.toUpperCase())}</td>
         <td>${esc(r.tipe)||'-'}</td>
+        <td>${r.asal?('<span class="badge" style="background:#EDE9FE;color:#5B21B6">dari '+esc(r.asal.toUpperCase())+'</span>'):'<span class="mono" style="color:var(--muted)">langsung</span>'}</td>
         <td class="eksp">${esc(r.eksp)||'-'}</td>
         <td class="rate">${rupiah(r.harga)}</td>
         <td>${i===0?'<span class="badge" style="background:#DCFCE7;color:#15803D">termurah</span>':('<span class="sel">+'+rupiah(selisih)+'</span>')}</td>
@@ -288,7 +291,7 @@ function kirimBatch(mulai, upd, tmb){
     document.getElementById('simpan-box').style.display='none';
     return;
   }
-  const potong=RATE.slice(mulai,mulai+UKURAN).map(r=>({eksp:r.eksp,tipe:r.tipe,kota:r.kotaRaw,harga:r.harga}));
+  const potong=RATE.slice(mulai,mulai+UKURAN).map(r=>({eksp:r.eksp,tipe:r.tipe,kota:r.kotaRaw,harga:r.harga,asal:r.asal||''}));
   const cb='cbSave'+Date.now();
   window[cb]=function(resp){
     delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);

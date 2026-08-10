@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v81</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v86</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -391,6 +391,7 @@ function prosesRate(rws){
   const iP=idx(['price','harga','rate']);
   const iE=idx(['expedition','ekspedisi','vendor']);
   const iK=idx(['kontak','no wa','whatsapp','no hp']);
+  const iA=idx(['asal','origin','dari','ship point']); // opsional: kosong = default (Cikande/langsung)
   if(iD<0 || iP<0){
     setHargaStatus('⚠️ Kolom rate tak dikenal: '+head.join(' | '));
     return false;
@@ -400,7 +401,8 @@ function prosesRate(rws){
     dest: cleanTxt(r[iD]||''),
     vtype: cleanTxt(iV>=0?r[iV]:''),
     price: toNumber(r[iP]),
-    kontak: iK>=0 ? cleanTxt(r[iK]||'') : ''
+    kontak: iK>=0 ? cleanTxt(r[iK]||'') : '',
+    asal: iA>=0 ? cleanTxt(r[iA]||'') : ''
   })).filter(r=>r.dest && r.price>0);
   setHargaStatus(hargaData.length ? ('✓ '+hargaData.length+' rate dimuat'+(window._rateSumber?(' ['+window._rateSumber+']'):'')) : '⚠️ Tidak ada rate valid');
   renderRanks();
@@ -595,8 +597,10 @@ function extractKota(tujuan){
   return norm(kota);
 }
 
-// Cari semua ekspedisi untuk tujuan + tipe, urut termurah
-function getRanking(tujuan, tipe){
+// Cari semua ekspedisi untuk tujuan + tipe (+ asal opsional), urut termurah.
+// asal kosong/undefined → cocokkan rate yg Asal-nya JUGA kosong (default/langsung).
+// asal diisi (mis. 'SURABAYA') → cocokkan rate yg Asal-nya SAMA (khusus leg tsb).
+function getRanking(tujuan, tipe, asal){
   if(!hargaData.length || !tujuan) return [];
   const kota = extractKota(tujuan);
   const v = norm(mapTipe(tipe));
@@ -604,12 +608,15 @@ function getRanking(tujuan, tipe){
   const vNS = noSpace(v);
   const kotaNS = noSpace(kota);
   if(!kotaNS) return [];
+  const asalNS = noSpace(asal||'');
   // cocok KOTA vs KOTA, harus SAMA PERSIS (abaikan spasi/tanda baca)
   // "PT. A - BALIKPAPAN" & "PT. B - BALIKPAPAN" → sama; kota beda → tidak tertukar
   const destMatch = h => {
     const dKotaNS = noSpace(extractKota(h.dest));
     return dKotaNS && dKotaNS===kotaNS;
   };
+  // cocok ASAL: kosong ketemu kosong, isi ketemu isi yg sama (tak tertukar antar rute)
+  const asalMatch = h => noSpace(h.asal||'') === asalNS;
   // cocok tipe: PERSIS dulu (biar 20 FT tak nyangkut ke 20 FT C / combo)
   const pilihCombo = /c$/.test(vNS) || /\(c\)/.test(v);
   const vtypeMatch = h => {
@@ -623,7 +630,7 @@ function getRanking(tujuan, tipe){
     if(hvCombo !== pilihCombo) return false;
     return hvNS && vNS && (hvNS.includes(vNS) || vNS.includes(hvNS));
   };
-  let list=hargaData.filter(h=>destMatch(h) && vtypeMatch(h));
+  let list=hargaData.filter(h=>destMatch(h) && vtypeMatch(h) && asalMatch(h));
   // dedup per ekspedisi (ambil termurah)
   const best={};
   list.forEach(h=>{
@@ -964,7 +971,7 @@ function pisahMultidrop(gid){
 }
 
 // ===== MULTI LEG (darat + laut, 1 tujuan 2 ekspedisi) =====
-const PELABUHAN_LIST = ['SURABAYA'];
+const PELABUHAN_LIST = ['SURABAYA','MOJOSARI'];
 function toggleMultiLeg(id, on){
   const r=rows.find(x=>x.id===id); if(!r) return;
   r.multiLeg = !!on;
@@ -1004,7 +1011,8 @@ function totalMultiLeg(r){
 // ranking untuk leg darat (ke pelabuhan) / leg laut (ke tujuan akhir)
 function rankingLeg(r, leg){
   if(leg===1) return (r.pelabuhan && r.tipe) ? getRanking(r.pelabuhan, r.tipe) : [];
-  return (r.tuj && r.tipe2) ? getRanking(r.tuj, r.tipe2) : [];
+  // LEG 2: rate khusus dari pelabuhan (asal) ke tujuan akhir — beda dgn rate langsung
+  return (r.tuj && r.tipe2) ? getRanking(r.tuj, r.tipe2, r.pelabuhan) : [];
 }
 
 // ===== Draft order tersimpan di Google Sheet (multi-admin) =====
@@ -1163,9 +1171,9 @@ function renderCards(){
           <span style="font-size:9px;color:var(--text3)">→ ${r.tuj||'-'}</span>
         </div>
         <div class="oc-row2" style="margin-bottom:7px">
-          <div><div class="oc-lbl">Kontainer</div><select class="truck-sel" onchange="setTipeLeg(${r.id},2,this.value)">${truckOptions(r.tipe2)}</select></div>
+          <div><div class="oc-lbl">Tipe LEG 2</div><select class="truck-sel" onchange="setTipeLeg(${r.id},2,this.value)">${truckOptions(r.tipe2)}</select></div>
         </div>
-        ${r.tipe2 ? gridRate(r,2,rank2,r.eksp2) : '<div class="oc-na">Pilih kontainer dulu</div>'}
+        ${r.tipe2 ? gridRate(r,2,rank2,r.eksp2) : '<div class="oc-na">Pilih tipe LEG 2 dulu</div>'}
       </div>
       <div style="background:#EDE9FE;border:1px solid #DDD6FE;border-radius:7px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:10.5px;color:#5B21B6;font-weight:700">Total (darat + laut)</span>
@@ -1516,11 +1524,11 @@ function buildPesan(eksp){
         lines += no+'. 📦 '+noItem+'\n   🎯 '+(r.tuj)+'\n'+
                  '   🔗 LEG 1 (DARAT) → '+(r.pelabuhan||'-')+'\n'+
                  '   🗓️ Muat: '+tglShow(r)+', jam '+(tampilJam(r.jam)||'-')+'\n'+
-                 '   🚛 '+(r.tipe||'-')+(isKontainer(r.tipe)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
+                 '   🚛 '+(r.tipe||'-')+((r.pilihHarga>0)?(' — '+rupiah(r.pilihHarga)):'')+'\n';
       }else{
         lines += no+'. 📦 '+noItem+'\n   🎯 '+(r.tuj)+'\n'+
                  '   🔗 LEG 2 (LAUT) dari '+(r.pelabuhan||'-')+'\n'+
-                 '   🚢 '+(r.tipe2||'-')+(isKontainer(r.tipe2)?(' — '+rupiah(r.harga2)):'')+'\n';
+                 '   🚢 '+(r.tipe2||'-')+((r.harga2>0)?(' — '+rupiah(r.harga2)):'')+'\n';
       }
       return;
     }
