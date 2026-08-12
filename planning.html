@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v89</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v90</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -735,8 +735,9 @@ function hapusDraftTanggalLalu(tglList, done){
 }
 
 // kirim draft per potong kecil (2 order/kirim) supaya URL tidak kepanjangan
-function simpanDraftBatch(list, mulai, sukses){
-  const UKURAN = 2; // order per request
+function simpanDraftBatch(list, mulai, sukses, percobaan){
+  const UKURAN = 6; // order per request (dikurangi jumlah round-trip drpd 2)
+  percobaan = percobaan || 0;
   if(mulai >= list.length){
     toast(sukses+' order tersimpan','ok');
     loadDraft();
@@ -745,7 +746,11 @@ function simpanDraftBatch(list, mulai, sukses){
   const potong = list.slice(mulai, mulai+UKURAN);
   gasJSONP('action=adddraft&items='+encodeURIComponent(JSON.stringify(potong)), function(resp){
     if(resp && resp.status==='ok'){
-      simpanDraftBatch(list, mulai+UKURAN, sukses+potong.length);
+      simpanDraftBatch(list, mulai+UKURAN, sukses+potong.length, 0);
+    }else if(percobaan < 2){
+      // coba ulang otomatis (maks 2x) sebelum menyerah — sering cuma lambat/timeout sesaat
+      setHargaStatus('⏳ Percobaan ulang simpan (ke-'+(percobaan+2)+')…');
+      setTimeout(()=> simpanDraftBatch(list, mulai, sukses, percobaan+1), 1500);
     }else{
       const pesan = resp ? (resp.message || JSON.stringify(resp)) : 'tidak ada respons (cek koneksi/URL GAS)';
       setHargaStatus('⚠️ Gagal simpan (order ke-'+(mulai+1)+'): '+pesan);
@@ -755,6 +760,7 @@ function simpanDraftBatch(list, mulai, sukses){
     }
   });
 }
+
 
 // Opsi jam kelipatan 30 menit
 function jamOptions(sel){
@@ -1023,10 +1029,15 @@ function rankingLeg(r, leg){
 // helper kirim ke GAS via JSONP
 function gasJSONP(params, onResp){
   const cb='cbG'+Date.now()+Math.floor(Math.random()*1000);
-  window[cb]=function(resp){ delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc); if(onResp) onResp(resp); };
+  let selesai=false;
+  const to=setTimeout(()=>{ if(selesai) return; selesai=true; delete window[cb]; if(onResp) onResp(null); }, 20000);
+  window[cb]=function(resp){
+    if(selesai) return; selesai=true; clearTimeout(to);
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc); if(onResp) onResp(resp);
+  };
   const sc=document.createElement('script');
   sc.src=GAS_URL+'?'+params+'&callback='+cb;
-  sc.onerror=function(){ delete window[cb]; if(onResp) onResp(null); };
+  sc.onerror=function(){ if(selesai) return; selesai=true; clearTimeout(to); delete window[cb]; if(onResp) onResp(null); };
   document.body.appendChild(sc);
 }
 
