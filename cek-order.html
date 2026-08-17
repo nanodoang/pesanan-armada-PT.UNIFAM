@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cek Status Order — PT. UNIFAM</title>
+<style>
+:root{--navy:#0C447C;--navy-d:#042C53;--teal:#1D9E75;--amber:#B45309;--red:#B91C1C;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E2E8F0;--bg:#F4F7FB;--card:#fff;--r:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.wrap{max-width:800px;margin:0 auto;padding:16px 14px 50px}
+.hdr{background:linear-gradient(120deg,var(--navy-d),var(--navy));border-radius:var(--r);padding:15px 20px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.hdr a.back{background:rgba(255,255,255,.15);color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:8px 12px;border-radius:8px;flex-shrink:0}
+.hdr .ic{width:40px;height:40px;background:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:21px}
+.hdr h1{font-size:17px;font-weight:800}
+.hdr p{font-size:11.5px;opacity:.85}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;margin-bottom:14px}
+.hint{font-size:12px;color:var(--muted);margin-bottom:9px;line-height:1.6}
+textarea{width:100%;min-height:130px;padding:11px 13px;border:1.5px solid var(--line);border-radius:9px;font-family:monospace;font-size:12px;resize:vertical}
+.btn{background:var(--navy);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px}
+.btn.sec{background:#EEF2F7;color:var(--ink);border:1px solid var(--line)}
+.status{font-size:12.5px;color:var(--muted);margin-top:10px}
+.stat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.stat{flex:1;min-width:100px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;text-align:center}
+.stat .n{font-size:19px;font-weight:800}
+.stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+th{text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:800;padding:8px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr.missing{background:#FEF2F2}
+tr.belum{background:#FFFBEB}
+tr.ok{background:#F0FDF4}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.b-missing{background:#FECACA;color:#991B1B}
+.b-belum{background:#FDE68A;color:#92400E}
+.b-ok{background:#BBF7D0;color:#15803D}
+.mono{font-family:monospace;font-size:11px}
+.empty{text-align:center;padding:26px;color:var(--muted)}
+.foot{text-align:center;font-size:11px;color:var(--muted);margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <a href="planning.html" class="back">← Planning</a>
+    <div class="ic">🔍</div>
+    <div>
+      <h1>Cek Status Order</h1>
+      <p>PT. UNIFAM — Cek order kapan saja, sebelum/sesudah dikonfirmasi</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="hint">
+      Tempel <b>No Order</b> (pisah koma/baris baru) atau langsung tempel <b>seluruh pesan WA</b> yang berisi order —
+      sistem otomatis ambil semua No Order-nya. Berguna untuk cek apakah order benar tersimpan,
+      dan lihat status konfirmasi kapan saja.
+    </p>
+    <textarea id="box" placeholder="Tempel No Order atau pesan WA order di sini…"></textarea>
+    <button class="btn" onclick="cek()">🔍 Cek Status</button>
+    <button class="btn sec" onclick="document.getElementById('box').value='';render(null)">Bersihkan</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="hasil"></div>
+
+  <p class="foot">PT. UNIFAM · Cek status order kapan saja</p>
+</div>
+
+<a href="https://nanodoang.github.io/Logistic-Transportation/" style="position:fixed;bottom:16px;left:16px;background:#fff;color:#0C447C;border:1px solid #BBD8F5;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:999;display:flex;align-items:center;gap:6px">← Portal Utama</a>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbyMkAvd7tQGkFkXpo3sjbuNa2389lVRAP4YxuUnffFn0TtUjsKkQLli-fB0QC_MWOVJqQ/exec';
+
+function esc(s){ return String(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+function rupiah(n){ return n?('Rp '+Number(n).toLocaleString('id-ID')):'-'; }
+
+// ambil semua No Order dari teks (baik daftar polos atau pesan WA lengkap)
+function ambilNoOrder(teks){
+  const re=/UNIFAM-\d{6}-\d+/gi;
+  const found=teks.match(re)||[];
+  const uniq=[...new Set(found.map(x=>x.toUpperCase()))];
+  return uniq;
+}
+
+function setStatus(t){ document.getElementById('status').textContent=t; }
+
+function cek(){
+  const teks=document.getElementById('box').value;
+  const noList=ambilNoOrder(teks);
+  if(!noList.length){ setStatus('⚠️ Tidak ada No Order (format UNIFAM-xxxxxx-xx) yang ditemukan'); render(null); return; }
+  setStatus('Mengecek '+noList.length+' No Order…');
+  const cb='cbCek'+Date.now();
+  let selesai=false;
+  const to=setTimeout(()=>{ if(selesai)return; selesai=true; setStatus('⚠️ Koneksi lambat, coba lagi'); },25000);
+  window[cb]=function(resp){
+    if(selesai) return; selesai=true; clearTimeout(to);
+    delete window[cb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok'){
+      render(noList, resp.orders||[]);
+      setStatus('✓ Selesai dicek');
+    }else{
+      setStatus('⚠️ Gagal memuat data');
+    }
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getorder&no_order='+encodeURIComponent(noList.join(','))+'&callback='+cb;
+  sc.onerror=function(){ if(selesai)return; selesai=true; clearTimeout(to); delete window[cb]; setStatus('⚠️ Gagal terhubung'); };
+  document.body.appendChild(sc);
+}
+
+function render(noList, orders){
+  const hasil=document.getElementById('hasil');
+  if(!noList){ hasil.innerHTML=''; return; }
+  orders = orders||[];
+
+  // kelompokkan hasil per No Order yang diminta
+  const rows=[];
+  const ditemukan={};
+  orders.forEach(o=>{ ditemukan[o.no_order]=true; rows.push(o); });
+  noList.forEach(no=>{
+    if(!ditemukan[no]) rows.push({ no_order:no, tuj:'', tipe:'', ekspedisi:'', _missing:true });
+  });
+
+  const jmlMissing=rows.filter(r=>r._missing).length;
+  const jmlBelum=rows.filter(r=>!r._missing && !r.sudahKonfirmasi).length;
+  const jmlOk=rows.filter(r=>!r._missing && r.sudahKonfirmasi).length;
+
+  let html=`<div class="stat-row">
+    <div class="stat"><div class="l">Total Dicek</div><div class="n" style="color:var(--navy)">${noList.length}</div></div>
+    <div class="stat"><div class="l">⚠️ Tak Tersimpan</div><div class="n" style="color:var(--red)">${jmlMissing}</div></div>
+    <div class="stat"><div class="l">⏳ Belum Konfirmasi</div><div class="n" style="color:var(--amber)">${jmlBelum}</div></div>
+    <div class="stat"><div class="l">✓ Sudah Konfirmasi</div><div class="n" style="color:var(--teal)">${jmlOk}</div></div>
+  </div>`;
+
+  if(jmlMissing>0){
+    html+=`<div class="card" style="border-color:#FECACA;background:#FEF2F2">
+      <b style="color:#991B1B">⚠️ ${jmlMissing} No Order TIDAK ditemukan di sheet</b>
+      <div style="font-size:11.5px;color:#7F1D1D;margin-top:5px">Order ini gagal tersimpan saat dikirim dari planning. Perlu dibuat ulang di planning & kirim lagi ke ekspedisi.</div>
+    </div>`;
+  }
+
+  html+=`<div class="card"><div style="overflow-x:auto"><table>
+    <thead><tr><th>No Order</th><th>Tujuan</th><th>Tipe</th><th>Ekspedisi</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>${rows.map(r=>{
+      let cls='ok', badge='<span class="badge b-ok">✓ Sudah Konfirmasi</span>', detail='-';
+      if(r._missing){
+        cls='missing'; badge='<span class="badge b-missing">⚠️ Tak Tersimpan</span>';
+      }else if(!r.sudahKonfirmasi){
+        cls='belum'; badge='<span class="badge b-belum">⏳ Belum Konfirmasi</span>';
+      }else{
+        const bag=[];
+        if(r.konf_sopir) bag.push('Sopir: '+esc(r.konf_sopir));
+        if(r.konf_nopol) bag.push('Nopol: '+esc(r.konf_nopol));
+        if(r.harga) bag.push(rupiah(r.harga));
+        detail=bag.join(' · ')||'-';
+        if(r.konf_status && /tidak/i.test(r.konf_status)){
+          cls='missing'; badge='<span class="badge b-missing">❌ Tidak Tersedia</span>';
+        }
+      }
+      return `<tr class="${cls}">
+        <td class="mono">${esc(r.no_order)}</td>
+        <td>${esc(r.tuj)||'-'}</td>
+        <td>${esc(r.tipe)||'-'}</td>
+        <td>${esc(r.ekspedisi)||'-'}</td>
+        <td>${badge}</td>
+        <td style="font-size:11.5px">${detail}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div></div>`;
+
+  hasil.innerHTML=html;
+}
+</script>
+</body>
+</html>
