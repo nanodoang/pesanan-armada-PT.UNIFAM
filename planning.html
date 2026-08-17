@@ -178,7 +178,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="ico"><img src="https://nanodoang.github.io/pesanan-armada-PT.UNIFAM/logo.jpg" alt="Unifam" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff;padding:3px"></div>
   <div style="min-width:0">
     <h1>Planning Armada</h1>
-    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v91</span></p>
+    <p>PT. UNIFAM — Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v93</span></p>
     <p id="harga-status" style="font-size:10px;color:#7FE0C0;margin-top:1px">Memuat data rate…</p>
     <p id="last-sync" style="font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1519,6 +1519,7 @@ function buildPesan(eksp){
   let catatanApprove='';
   const noOrderSet=[]; // kumpulan No Order (draft_id) untuk link
   const pushNo=id=>{ if(id && noOrderSet.indexOf(id)<0) noOrderSet.push(id); };
+  const itemNoMap={}; // item.id -> No Order yg dipakai utk simpan (akurat utk multidrop juga)
 
   // pisahkan: multi-drop grup vs item tunggal
   const grupMap={}; const single=[];
@@ -1533,6 +1534,7 @@ function buildPesan(eksp){
     no++;
     const noItem = r.draft_id || r.noOrder || buatNoOrder();
     pushNo(noItem);
+    itemNoMap[r.id] = noItem;
     // MULTI LEG: tampilkan sesuai leg untuk ekspedisi ini, TANPA jam muat
     if(r.multiLeg){
       const legDarat = (r.pilihEksp===eksp);
@@ -1570,6 +1572,7 @@ function buildPesan(eksp){
     const g=grupMap[gid];
     const noGrup = g[0].draft_id || g[0].noOrder || buatNoOrder();
     pushNo(noGrup);
+    g.forEach(x=>{ itemNoMap[x.id] = noGrup; }); // semua tujuan dlm grup pakai No Order yg sama
     const rateTertinggi = Math.max(...g.map(x=>x.pilihHarga||0));
     const biayaDrop = g[0].biayaDrop || 0;
     const totalDrop = rateTertinggi + biayaDrop;
@@ -1681,7 +1684,7 @@ function buildPesan(eksp){
       sales: r.sales||'', total: r.total||''
     };
   });
-  currentBatch={ noOrd: noOrdGabung, eksp, msg, msgApprove, orderRows, items };
+  currentBatch={ noOrd: noOrdGabung, eksp, msg, msgApprove, orderRows, items, itemNoMap };
 }
 
 // kirim WA approve ke grup management (kontak dipilih manual)
@@ -1701,6 +1704,29 @@ function copyPesan(){
 }
 
 // SIMPAN + KIRIM WA
+// Simpan order SATU PER SATU (berurutan), retry maks 2x kalau gagal.
+function simpanBerurutan(noKeys, idx, perNo, b, ts, gagal, selesai, percobaan){
+  percobaan = percobaan || 0;
+  if(idx >= noKeys.length){ selesai(); return; }
+  const no = noKeys[idx];
+  setHargaStatus('Menyimpan order '+(idx+1)+'/'+noKeys.length+'…');
+  gasJSONP('action=save&no_order='+encodeURIComponent(no)+
+    '&ekspedisi='+encodeURIComponent(b.eksp)+
+    '&orderRows='+encodeURIComponent(JSON.stringify(perNo[no]))+
+    '&catatan='+encodeURIComponent('via Planning')+
+    '&timestamp='+encodeURIComponent(ts),
+    function(resp){
+      if(resp && resp.status!=='error'){
+        simpanBerurutan(noKeys, idx+1, perNo, b, ts, gagal, selesai, 0);
+      }else if(percobaan < 2){
+        setTimeout(()=> simpanBerurutan(noKeys, idx, perNo, b, ts, gagal, selesai, percobaan+1), 1200);
+      }else{
+        gagal.push(no);
+        simpanBerurutan(noKeys, idx+1, perNo, b, ts, gagal, selesai, 0);
+      }
+    });
+}
+
 function kirimBatch(){
   if(!currentBatch){ toast('Pilih ekspedisi dulu','err'); return; }
   const b=currentBatch;
@@ -1712,20 +1738,35 @@ function kirimBatch(){
   });
   const noKeys=Object.keys(perNo);
   const ts=new Date().toLocaleString('id-ID');
-  // kirim satu per satu (berurutan) via JSONP
-  noKeys.forEach(function(no, idx){
-    const cb='cbSave'+Date.now()+'_'+idx;
-    window[cb]=function(){ delete window[cb]; };
-    const params='action=save&no_order='+encodeURIComponent(no)+
-      '&ekspedisi='+encodeURIComponent(b.eksp)+
-      '&orderRows='+encodeURIComponent(JSON.stringify(perNo[no]))+
-      '&catatan='+encodeURIComponent('via Planning')+
-      '&timestamp='+encodeURIComponent(ts)+
-      '&callback='+cb;
-    const sc=document.createElement('script');
-    sc.src=GAS_URL+'?'+params;
-    sc.onerror=function(){ delete window[cb]; };
-    document.body.appendChild(sc);
+
+  // kirim SATU PER SATU berurutan (BUKAN bersamaan — GAS bisa gagal diam-diam
+  // kalau dikirim serentak banyak sekaligus), dengan percobaan ulang kalau gagal.
+  const gagal=[];
+  setHargaStatus('Menyimpan order 1/'+noKeys.length+'…');
+  simpanBerurutan(noKeys, 0, perNo, b, ts, gagal, function(){
+    // hapus draft HANYA untuk No Order yang BERHASIL tersimpan.
+    // Yang gagal TETAP ada di planning (draft utuh) — tak perlu input ulang.
+    const gagalSet = new Set(gagal);
+    const noMap = b.itemNoMap || {};
+    const berhasilItems = (b.items||[]).filter(r=> !gagalSet.has(noMap[r.id]));
+    const gagalItems = (b.items||[]).filter(r=> gagalSet.has(noMap[r.id]));
+    const draftIds = berhasilItems.filter(r=>r.isDraft && r.draft_id).map(r=>r.draft_id);
+    if(draftIds.length){
+      gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')));
+    }
+    const berhasilIds = new Set(berhasilItems.map(r=>r.id));
+    rows = rows.filter(r=> !berhasilIds.has(r.id));
+    renderRows();
+
+    if(gagal.length){
+      alert('⚠️ '+gagal.length+' dari '+noKeys.length+' order GAGAL tersimpan:\n\n'+gagal.join('\n')+
+            '\n\nOrder ini TETAP ADA di planning (tidak hilang) — tinggal pilih ekspedisi & kirim ulang, tak perlu input ulang.');
+      setHargaStatus('⚠️ '+gagal.length+' order gagal tersimpan — tetap ada di planning');
+      toast(gagal.length+' order gagal, cek planning','err');
+    }else{
+      setHargaStatus('✓ Semua order tersimpan');
+      toast('Order tersimpan & WA dibuka','ok');
+    }
   });
 
   // buka WA (dipicu klik langsung → tidak diblokir)
@@ -1735,17 +1776,6 @@ function kirimBatch(){
   lastWA = { url: waUrl, msg: b.msg, eksp: b.eksp, hp: hp };
   window.open(waUrl,'_blank');
   tampilKirimUlang();
-
-  // hapus baris yang sudah dikirim dari draft Sheet & tampilan
-  const sentItems = b.items || [];
-  const draftIds = sentItems.filter(r=>r.isDraft && r.draft_id).map(r=>r.draft_id);
-  if(draftIds.length){
-    gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')));
-  }
-  const sentIds = new Set(sentItems.map(r=>r.id));
-  rows = rows.filter(r=> !sentIds.has(r.id));
-  renderRows();
-  toast('Order tersimpan & WA dibuka','ok');
 }
 
 // ==== KIRIM ULANG WA (kalau chat hilang karena sinyal) ====
