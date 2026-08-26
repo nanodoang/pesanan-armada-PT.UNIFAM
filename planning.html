@@ -185,7 +185,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div style="min-width:0">
     <div style="font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)">PT. UNIFAM</div>
     <h1>Planning Armada</h1>
-    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v96</span></p>
+    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v97</span></p>
     <p id="harga-status" style="font-family:var(--mono);font-size:10px;color:#8FDCC7;margin-top:2px"></p>
     <p id="last-sync" style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1767,6 +1767,14 @@ function simpanBerurutan(noKeys, idx, perNo, b, ts, gagal, selesai, percobaan){
 function kirimBatch(){
   if(!currentBatch){ toast('Pilih ekspedisi dulu','err'); return; }
   const b=currentBatch;
+
+  // Simpan JAM yang dipakai saat kirim ke kolom Jam di Planning Draft.
+  // hitungJamMuat() cuma hitung utk tampilan layar, tak pernah tersimpan ke
+  // sheet kecuali dropdown jam diubah manual — jadi harus dipaksa simpan di sini.
+  (b.items||[]).forEach(function(r){
+    if(r.isDraft && r.draft_id && r.jam){ updateDraftField(r,'jam'); }
+  });
+
   // Pecah orderRows PER No Order → tiap request pendek (hindari URL kepanjangan)
   const perNo={};
   (b.orderRows||[]).forEach(function(r){
