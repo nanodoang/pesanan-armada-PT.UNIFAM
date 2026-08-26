@@ -125,15 +125,13 @@ function pesanReminder(o){
 }
 function kirimReminderSatu(idx){
   const o=DATA[idx];
-  const hp=normHP(o.kontak_eksp);
-  if(!hp){ alert('Nomor kontak ekspedisi '+o.ekspedisi+' belum ada di sheet rate (kolom Kontak).'); return; }
+  const hp=normHP(o.kontak_eksp); // kalau kosong, WA tetap dibuka → pilih kontak manual
   window.open('https://wa.me/'+hp+'?text='+encodeURIComponent(pesanReminder(o)),'_blank');
 }
 function kirimReminderRekap(ekspedisi){
   const list=DATA.filter(o=>o.ekspedisi===ekspedisi && o.status==='belum');
   if(!list.length) return;
-  const hp=normHP(list[0].kontak_eksp);
-  if(!hp){ alert('Nomor kontak ekspedisi '+ekspedisi+' belum ada di sheet rate (kolom Kontak).'); return; }
+  const hp=normHP(list[0].kontak_eksp); // kalau kosong, WA tetap dibuka → pilih kontak manual
   let msg=`⏰ *PENGINGAT KONFIRMASI*\nPT. UNIFAM — Ekspedisi *${ekspedisi}*\n\nMohon segera konfirmasi ${list.length} order berikut:\n`;
   list.forEach(o=>{ const jamLine=o.jam?`🗓️ Jam Muat: ${o.jam}\n`:''; msg+=`\n📦 ${o.no_order}\n🎯 ${o.tuj}\n${jamLine}`; });
   msg+='\nTerima kasih 🙏';
