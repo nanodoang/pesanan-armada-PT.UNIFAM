@@ -118,7 +118,8 @@ function muat(){
 }
 
 function pesanReminder(o){
-  return `⏰ *PENGINGAT KONFIRMASI*\nPT. UNIFAM\n\nMohon konfirmasi order berikut:\n\n📦 ${o.no_order}\n🎯 ${o.tuj}\n🗓️ Jam Muat: ${o.jam}\n\nTerima kasih 🙏`;
+  const jamLine = o.jam ? `🗓️ Jam Muat: ${o.jam}\n` : '';
+  return `⏰ *PENGINGAT KONFIRMASI*\nPT. UNIFAM\n\nMohon konfirmasi order berikut:\n\n📦 ${o.no_order}\n🎯 ${o.tuj}\n${jamLine}\nTerima kasih 🙏`;
 }
 function kirimReminderSatu(idx){
   const o=DATA[idx];
@@ -132,7 +133,7 @@ function kirimReminderRekap(ekspedisi){
   const hp=normHP(list[0].kontak_eksp);
   if(!hp){ alert('Nomor kontak ekspedisi '+ekspedisi+' belum ada di sheet rate (kolom Kontak).'); return; }
   let msg=`⏰ *PENGINGAT KONFIRMASI*\nPT. UNIFAM — Ekspedisi *${ekspedisi}*\n\nMohon segera konfirmasi ${list.length} order berikut:\n`;
-  list.forEach(o=>{ msg+=`\n📦 ${o.no_order}\n🎯 ${o.tuj}\n🗓️ Jam Muat: ${o.jam}\n`; });
+  list.forEach(o=>{ const jamLine=o.jam?`🗓️ Jam Muat: ${o.jam}\n`:''; msg+=`\n📦 ${o.no_order}\n🎯 ${o.tuj}\n${jamLine}`; });
   msg+='\nTerima kasih 🙏';
   window.open('https://wa.me/'+hp+'?text='+encodeURIComponent(msg),'_blank');
 }
@@ -142,32 +143,38 @@ function render(){
   if(!DATA.length){ isi.innerHTML='<div class="empty">Tidak ada order untuk tanggal ini</div>'; return; }
 
   const total=DATA.length;
+  const draftBelumKirim=DATA.filter(o=>o.status==='draft').length;
   const belum=DATA.filter(o=>o.status==='belum').length;
   const ok=DATA.filter(o=>o.status==='konfirmasi').length;
   const ditolak=DATA.filter(o=>o.status==='ditolak').length;
 
   let html=`<div class="stat-row">
     <div class="stat"><div class="l">Total</div><div class="n" style="color:var(--navy)">${total}</div></div>
+    <div class="stat"><div class="l">Belum Dikirim</div><div class="n" style="color:var(--text3)">${draftBelumKirim}</div></div>
     <div class="stat"><div class="l">Belum Konfirmasi</div><div class="n" style="color:var(--amber)">${belum}</div></div>
     <div class="stat"><div class="l">Terkonfirmasi</div><div class="n" style="color:var(--green)">${ok}</div></div>
     <div class="stat"><div class="l">Ditolak</div><div class="n" style="color:var(--red)">${ditolak}</div></div>
   </div>`;
 
   // urutan antrian utuh
-  html+='<div class="sec-lbl">Urutan Antrian (sesuai jam muat)</div><div class="card"><table><thead><tr><th>No</th><th>Jam</th><th>Tujuan</th><th>Ekspedisi</th><th>Status</th><th></th></tr></thead><tbody>';
+  html+='<div class="sec-lbl">Urutan Antrian (sesuai jam muat)</div><div class="card"><table><thead><tr><th>No</th><th>Jam</th><th>Tujuan</th><th>Ekspedisi</th><th>Sumber</th><th>Status</th><th></th></tr></thead><tbody>';
   DATA.forEach((o,i)=>{
     const cls = o.status==='belum'?'belum':(o.status==='ditolak'?'ditolak':'');
     const badge = o.status==='konfirmasi' ? '<span class="badge b-ok">✓ Konfirmasi</span>'
                 : o.status==='ditolak' ? '<span class="badge b-ditolak">❌ Ditolak</span>'
+                : o.status==='draft' ? '<span class="badge" style="background:var(--card2);color:var(--text3);border:1px solid var(--border2)">Belum Dikirim</span>'
                 : '<span class="badge b-belum">⏳ Belum</span>';
     const btnWa = o.status==='belum'
       ? `<button class="btn-wa-row" onclick="kirimReminderSatu(${i})">💬 Ingatkan</button>`
       : '';
+    const jamTampil = o.jam ? esc(o.jam) : '<span style="color:var(--text3);font-style:italic">belum diisi</span>';
+    const sumber = o.dari_lelang ? '<span class="badge" style="background:#EDE9FE;color:#5B21B6;border:1px solid #C4B5FD">Lelang</span>' : '<span class="badge" style="background:var(--card2);color:var(--text3);border:1px solid var(--border2)">Planning</span>';
     html+=`<tr class="${cls}">
       <td class="no-ant">${o.no_antrian}</td>
-      <td class="jam">${esc(o.jam)}</td>
+      <td class="jam">${jamTampil}</td>
       <td>${esc(o.tuj)}</td>
       <td>${esc(o.ekspedisi)||'-'}</td>
+      <td>${sumber}</td>
       <td>${badge}</td>
       <td>${btnWa}</td>
     </tr>`;
