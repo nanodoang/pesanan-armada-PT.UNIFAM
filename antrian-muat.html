@@ -37,7 +37,7 @@ input[type=date]{padding:10px 12px;border:1px solid var(--border2);border-radius
 .stat .l{font-family:var(--disp);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
 .card{background:#fff;border:1px solid var(--border);margin-bottom:14px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;font-family:var(--disp);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:var(--navy);padding:10px 11px}
+th{text-align:left;font-family:var(--disp);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:var(--navy);padding:10px 11px;position:sticky;top:var(--header-h,100px);z-index:10}
 td{padding:10px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr.belum{background:var(--amber-bg)}
@@ -58,6 +58,7 @@ tr.ditolak{background:var(--red-bg)}
 </style>
 </head>
 <body>
+<div id="top-sticky" style="position:sticky;top:0;z-index:60">
 <div class="hdr">
   <div class="ico">📋</div>
   <div>
@@ -66,6 +67,7 @@ tr.ditolak{background:var(--red-bg)}
   </div>
 </div>
 <nav><a href="planning.html">← Planning</a></nav>
+</div>
 
 <div class="wrap">
   <div class="toolbar">
@@ -200,6 +202,15 @@ function render(){
 
   isi.innerHTML=html;
 }
+
+// ukur tinggi header+nav sticky, dipakai supaya header tabel menempel TEPAT di bawahnya
+function aturTinggiHeader(){
+  const el = document.getElementById('top-sticky');
+  if(el) document.documentElement.style.setProperty('--header-h', el.offsetHeight+'px');
+}
+window.addEventListener('load', aturTinggiHeader);
+window.addEventListener('resize', aturTinggiHeader);
+aturTinggiHeader();
 
 hariIni();
 </script>
