@@ -186,7 +186,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div style="min-width:0">
     <div style="font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)">PT. UNIFAM</div>
     <h1>Planning Armada</h1>
-    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v98</span></p>
+    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v99</span></p>
     <p id="harga-status" style="font-family:var(--mono);font-size:10px;color:#8FDCC7;margin-top:2px"></p>
     <p id="last-sync" style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -543,49 +543,74 @@ const TARGET_TIPE_DEFAULT = {
   'CD 17':1.5,'CD 20':1.5,'CD 24':1.5
 };
 
+// ==== SEKUEN (SHIFT) — jam mulai tiap sekuen, & pemetaan ekspedisi → sekuen ====
+// Sekuen 1: 07:00-15:00 · Sekuen 2: 15:00-23:00 · Sekuen 3: 23:00-07:00 (besok)
+const SEKUEN_JAM = { 1: 7*60, 2: 15*60, 3: 23*60 };
+function sekuenEkspedisi(){
+  const s = muatSettings().sekuenEkspedisi;
+  return (s && Object.keys(s).length) ? s : { 'UFF': 3 }; // default: UFF di Sekuen 3
+}
+
 function menitKeJam(m){
-  // balik ke hari baru kalau lewat 24 jam (jangan akumulasi 25:00 dst)
+  // balik ke hari baru kalau lewat 24 jam (jangan akumulasi 25:00 dst).
+  // CATATAN: tanggal (r.tgl) TIDAK ikut berubah di sini — tanggal tetap sesuai
+  // rencana muat, walau jam-nya lewat tengah malam (mis. Sekuen 3 → 01:00).
   let mm = ((m % 1440) + 1440) % 1440;
   const h=Math.floor(mm/60), mn=Math.round(mm%60);
   return ('0'+h).slice(-2)+':'+('0'+mn).slice(-2);
+}
+function durasiItem(item, mode, kpj, target){
+  if(mode==='tipe'){
+    const tipeR = normalizeTipe(item.r.tipe||'');
+    const jamTarget = target[tipeR] != null ? target[tipeR] : (TARGET_TIPE_DEFAULT[tipeR] != null ? TARGET_TIPE_DEFAULT[tipeR] : 2);
+    return jamTarget*60;
+  }
+  return (item.karton/kpj)*60;
 }
 function hitungJamMuat(){
   if(!rows.length || !Object.keys(seqMap).length) return;
   const mode = modeMuat();
   const kpj = kartonPerJam();
   const target = targetTipe();
+  const sekuenMap = sekuenEkspedisi(); // { 'UFF': 3, ... } — nama ekspedisi HARUS uppercase
   // hanya order yang punya karton (total) & belum multidrop-child rumit
   const list=rows.map(r=>{
     const info=seqMap[norm(r.tuj)];
     const karton=toNumber(r.total)||0;
-    return { r:r, seq: info?info.seq:9999, ketemu:!!info, karton:karton };
+    const eksp = String(r.pilihEksp||'').toUpperCase().trim();
+    const sekuenTarget = eksp && sekuenMap[eksp] ? sekuenMap[eksp] : null; // ekspedisi ini pindah sekuen khusus?
+    return { r:r, seq: info?info.seq:9999, ketemu:!!info, karton:karton, sekuenTarget:sekuenTarget };
   });
   // urut by sequence (kecil dulu), lalu karton
   list.sort((a,b)=> a.seq-b.seq || b.karton-a.karton);
-  // 2 jalur: waktu selesai tiap jalur (menit)
-  const jalur=[MUAT_MULAI, MUAT_MULAI]; // A, B
-  list.forEach(item=>{
-    if(!item.ketemu){
-      item.r.jam='CEK MANUAL';
-      item.r.jamMuatAuto=true;
-      return;
-    }
-    // pilih jalur yang lebih dulu kosong
-    const idx = jalur[0]<=jalur[1] ? 0 : 1;
-    const mulai = jalur[idx];
-    item.r.jam = menitKeJam(mulai);
-    item.r.jamMuatAuto = true;
-    // durasi: mode karton (karton/target per jam) ATAU mode per tipe mobil (jam tetap)
-    let durasi;
-    if(mode==='tipe'){
-      const tipeR = normalizeTipe(item.r.tipe||'');
-      const jamTarget = target[tipeR] != null ? target[tipeR] : (TARGET_TIPE_DEFAULT[tipeR] != null ? TARGET_TIPE_DEFAULT[tipeR] : 2);
-      durasi = jamTarget*60;
-    }else{
-      durasi = (item.karton/kpj)*60;
-    }
-    jalur[idx] = mulai + durasi;
+
+  // pisahkan: item dg ekspedisi yg dipetakan ke sekuen khusus (dijadwal TERPISAH,
+  // mulai dari jam sekuen itu) vs item biasa (jadwal default mulai MUAT_MULAI)
+  const biasa = list.filter(x=>!x.sekuenTarget);
+  const perSekuen = {}; // { 1:[...], 2:[...], 3:[...] }
+  list.forEach(x=>{ if(x.sekuenTarget){ (perSekuen[x.sekuenTarget]=perSekuen[x.sekuenTarget]||[]).push(x); } });
+
+  function jadwalkan(daftar, jamMulai){
+    const jalur=[jamMulai, jamMulai]; // 2 jalur paralel
+    daftar.forEach(item=>{
+      if(!item.ketemu){
+        item.r.jam='CEK MANUAL';
+        item.r.jamMuatAuto=true;
+        return;
+      }
+      const idx = jalur[0]<=jalur[1] ? 0 : 1;
+      const mulai = jalur[idx];
+      item.r.jam = menitKeJam(mulai); // tanggal (r.tgl) TIDAK disentuh
+      item.r.jamMuatAuto = true;
+      jalur[idx] = mulai + durasiItem(item, mode, kpj, target);
+    });
+  }
+
+  jadwalkan(biasa, MUAT_MULAI);
+  Object.keys(perSekuen).forEach(sk=>{
+    jadwalkan(perSekuen[sk], SEKUEN_JAM[sk] || MUAT_MULAI);
   });
+
   renderRows();
 }
 
@@ -1486,7 +1511,7 @@ function pilihEksp(id,eksp,price){
     else { x.pilihEksp=eksp; x.pilihHarga=price; }
     if(x.isDraft){ updateDraftField(x,'pilihEksp'); updateDraftField(x,'pilihHarga'); }
   });
-  renderRows();
+  hitungJamMuat(); // ekspedisi berubah → jam bisa berubah (mis. sekuen khusus)
 }
 
 // ============ TAHAP 2: GROUP ============
@@ -2008,6 +2033,24 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div id="tabel-target-tipe" style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden"></div>
       </div>
 
+      <div style="margin-top:20px;border-top:1px dashed var(--border2);padding-top:16px">
+        <div class="sec-lbl">Sekuen Khusus per Ekspedisi</div>
+        <p style="font-family:var(--mono);font-size:10.5px;color:var(--text3);margin-bottom:10px">
+          Sekuen 1: 07:00–15:00 · Sekuen 2: 15:00–23:00 · Sekuen 3: 23:00–07:00 (besok).
+          Ekspedisi yg dipetakan di sini dijadwalkan MULAI dari jam sekuennya (tanggal muat tetap sesuai rencana).
+        </p>
+        <div id="tabel-sekuen-eksp" style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px"></div>
+        <div style="display:flex;gap:7px">
+          <input type="text" id="input-eksp-baru" placeholder="Nama ekspedisi" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--r);font-family:var(--mono);font-size:12.5px;text-transform:uppercase">
+          <select id="input-sekuen-baru" style="padding:8px 10px;border:1px solid var(--border2);border-radius:var(--r);font-family:var(--mono);font-size:12.5px">
+            <option value="1">Sekuen 1</option>
+            <option value="2">Sekuen 2</option>
+            <option value="3" selected>Sekuen 3</option>
+          </select>
+          <button onclick="tambahSekuenEksp()" style="padding:8px 14px;background:var(--teal-d);color:#fff;border:none;border-radius:var(--r);font-family:var(--disp);font-size:12px;font-weight:600;text-transform:uppercase;cursor:pointer">+ Tambah</button>
+        </div>
+      </div>
+
       <div style="display:flex;gap:9px;margin-top:18px">
         <button onclick="simpanPengaturanMuat()" style="flex:1;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:var(--r);font-family:var(--disp);font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;cursor:pointer">Simpan &amp; Hitung Ulang</button>
         <button onclick="tutupPengaturan()" style="padding:12px 18px;background:#fff;border:1px solid var(--border2);border-radius:var(--r);font-family:var(--disp);font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text2);cursor:pointer">Batal</button>
@@ -2023,8 +2066,43 @@ function bukaPengaturan(){
   document.querySelector('input[name="mode-muat"][value="'+mode+'"]').checked = true;
   document.getElementById('input-kpj').value = s.kartonPerJam || KARTON_PER_JAM_DEFAULT;
   renderTabelTargetTipe(s.targetTipe || {});
+  renderTabelSekuenEksp(sekuenEkspedisi());
   pilihModeMuat(mode);
   document.getElementById('pengaturan-overlay').style.display = 'block';
+}
+function renderTabelSekuenEksp(map){
+  const keys = Object.keys(map);
+  if(!keys.length){
+    document.getElementById('tabel-sekuen-eksp').innerHTML = '<div style="padding:11px 13px;font-family:var(--mono);font-size:11.5px;color:var(--text3)">Belum ada ekspedisi diatur.</div>';
+    return;
+  }
+  let html = '<div style="display:grid;grid-template-columns:1fr 100px 40px;background:var(--card2);font-family:var(--disp);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);padding:8px 13px">'+
+    '<span>Ekspedisi</span><span>Sekuen</span><span></span></div>';
+  keys.forEach(ek=>{
+    html += '<div style="display:grid;grid-template-columns:1fr 100px 40px;align-items:center;padding:8px 13px;border-top:1px solid var(--border)">'+
+      '<span style="font-family:var(--mono);font-size:12.5px;font-weight:600">'+ek+'</span>'+
+      '<span style="font-family:var(--mono);font-size:12.5px">Sekuen '+map[ek]+'</span>'+
+      '<button onclick="hapusSekuenEksp(\''+ek.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px">×</button>'+
+    '</div>';
+  });
+  document.getElementById('tabel-sekuen-eksp').innerHTML = html;
+}
+let _sekuenEkspEdit = null; // disimpan sementara selama modal terbuka, ikut disimpan saat Simpan diklik
+function tambahSekuenEksp(){
+  const ek = (document.getElementById('input-eksp-baru').value||'').trim().toUpperCase();
+  const sk = Number(document.getElementById('input-sekuen-baru').value)||3;
+  if(!ek){ toast('Isi nama ekspedisi dulu','err'); return; }
+  const map = _sekuenEkspEdit || Object.assign({}, sekuenEkspedisi());
+  map[ek] = sk;
+  _sekuenEkspEdit = map;
+  document.getElementById('input-eksp-baru').value='';
+  renderTabelSekuenEksp(map);
+}
+function hapusSekuenEksp(ek){
+  const map = _sekuenEkspEdit || Object.assign({}, sekuenEkspedisi());
+  delete map[ek];
+  _sekuenEkspEdit = map;
+  renderTabelSekuenEksp(map);
 }
 function tutupPengaturan(){
   document.getElementById('pengaturan-overlay').style.display = 'none';
@@ -2055,7 +2133,9 @@ function simpanPengaturanMuat(){
   document.querySelectorAll('.target-tipe-input').forEach(inp=>{
     targetTipeBaru[inp.dataset.tipe] = Number(inp.value) || 2;
   });
-  simpanMuatSettings({ mode: mode, kartonPerJam: kpj, targetTipe: targetTipeBaru });
+  const sekuenBaru = _sekuenEkspEdit || sekuenEkspedisi();
+  _sekuenEkspEdit = null;
+  simpanMuatSettings({ mode: mode, kartonPerJam: kpj, targetTipe: targetTipeBaru, sekuenEkspedisi: sekuenBaru });
   tutupPengaturan();
   hitungJamMuat();
   toast('Pengaturan tersimpan — jadwal dihitung ulang','ok');

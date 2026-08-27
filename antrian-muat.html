@@ -157,7 +157,7 @@ function render(){
   </div>`;
 
   // urutan antrian utuh
-  html+='<div class="sec-lbl">Urutan Antrian (sesuai jam muat)</div><div class="card"><table><thead><tr><th>No</th><th>Jam</th><th>Tujuan</th><th>Ekspedisi</th><th>Sumber</th><th>Status</th><th></th></tr></thead><tbody>';
+  html+='<div class="sec-lbl">Urutan Antrian (sesuai jam muat)</div><div class="card"><table><thead><tr><th>No</th><th>Jam</th><th>Tujuan</th><th>Ekspedisi</th><th>Sumber</th><th>Nopol</th><th>Status</th><th></th></tr></thead><tbody>';
   DATA.forEach((o,i)=>{
     const cls = o.status==='belum'?'belum':(o.status==='ditolak'?'ditolak':'');
     const badge = o.status==='konfirmasi' ? '<span class="badge b-ok">✓ Konfirmasi</span>'
@@ -169,12 +169,14 @@ function render(){
       : '';
     const jamTampil = o.jam ? esc(o.jam) : '<span style="color:var(--text3);font-style:italic">belum diisi</span>';
     const sumber = o.dari_lelang ? '<span class="badge" style="background:#EDE9FE;color:#5B21B6;border:1px solid #C4B5FD">Lelang</span>' : '<span class="badge" style="background:var(--card2);color:var(--text3);border:1px solid var(--border2)">Planning</span>';
+    const nopolTampil = o.konf_nopol ? '<span style="font-family:var(--mono);font-weight:600">'+esc(o.konf_nopol)+'</span>' : '<span style="color:var(--text3)">-</span>';
     html+=`<tr class="${cls}">
       <td class="no-ant">${o.no_antrian}</td>
       <td class="jam">${jamTampil}</td>
       <td>${esc(o.tuj)}</td>
       <td>${esc(o.ekspedisi)||'-'}</td>
       <td>${sumber}</td>
+      <td>${nopolTampil}</td>
       <td>${badge}</td>
       <td>${btnWa}</td>
     </tr>`;
