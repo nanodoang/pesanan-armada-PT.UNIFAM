@@ -186,7 +186,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div style="min-width:0">
     <div style="font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)">PT. UNIFAM</div>
     <h1>Planning Armada</h1>
-    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v99</span></p>
+    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v105</span></p>
     <p id="harga-status" style="font-family:var(--mono);font-size:10px;color:#8FDCC7;margin-top:2px"></p>
     <p id="last-sync" style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -313,6 +313,7 @@ function mapTipe(t){ return TIPE_MAP[norm(t)] || t; }
 let hargaData = [];   // [{expedition, dest, vtype, price, hp}]
 let distData  = [];   // [{kota, dist}]
 let rows      = [];   // [{id, tuj, tgl, tipe, kode, pilihEksp, pilihHarga}]
+let lelangRows = [];  // order dari lelang: tak tampil di tabel, tapi ikut hitung jam bersama
 let rowSeq    = 0;
 let checkedIds = new Set(); // baris tercentang utk multi-drop
 let dropSeq   = 0;          // nomor grup multi-drop
@@ -494,7 +495,7 @@ function prosesMaster(rws){
     if(!nama) return;
     const mAngka=seqRaw.match(/(\d+)/);
     const seq=mAngka?parseInt(mAngka[1],10):999;
-    const waktu=/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':'');
+    const waktu=/malam/i.test(seqRaw)?'malam':(/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':''));
     seqMap[norm(nama)]={seq:seq, waktu:waktu, raw:seqRaw};
   });
   hitungJamMuat();
@@ -568,50 +569,60 @@ function durasiItem(item, mode, kpj, target){
   return (item.karton/kpj)*60;
 }
 function hitungJamMuat(){
-  if(!rows.length || !Object.keys(seqMap).length) return;
+  const gabungan = rows.concat(lelangRows.filter(r=>!r._jamTerkunci));
+  if(!gabungan.length || !Object.keys(seqMap).length) return;
   const mode = modeMuat();
   const kpj = kartonPerJam();
   const target = targetTipe();
   const sekuenMap = sekuenEkspedisi(); // { 'UFF': 3, ... } — nama ekspedisi HARUS uppercase
-  // hanya order yang punya karton (total) & belum multidrop-child rumit
-  const list=rows.map(r=>{
+  const WAKTU_SEKUEN = { pagi:1, siang:2, malam:3 }; // dari label tabel master (Pagi/Siang/Malam)
+
+  // SATU jalur bersama sepanjang hari (gabung order planning + lelang) —
+  // Pagi/Siang/Malam/ekspedisi khusus (mis. UFF) CUMA menentukan URUTAN
+  // PRIORITAS diproses, BUKAN jam wajib ditunggu. Kalau prioritas di atasnya
+  // sedikit/kosong, langsung lanjut ke berikutnya.
+  const list=gabungan.map(r=>{
     const info=seqMap[norm(r.tuj)];
     const karton=toNumber(r.total)||0;
     const eksp = String(r.pilihEksp||'').toUpperCase().trim();
-    const sekuenTarget = eksp && sekuenMap[eksp] ? sekuenMap[eksp] : null; // ekspedisi ini pindah sekuen khusus?
-    return { r:r, seq: info?info.seq:9999, ketemu:!!info, karton:karton, sekuenTarget:sekuenTarget };
+    const prioritasEksp = eksp && sekuenMap[eksp] ? sekuenMap[eksp] : null;
+    const prioritasWaktu = (info && info.waktu && WAKTU_SEKUEN[info.waktu]) ? WAKTU_SEKUEN[info.waktu] : null;
+    // ekspedisi dg sekuen khusus (mis. UFF) selalu PALING AKHIR (prioritas 100+),
+    // biar tak tercampur dg urutan pagi/siang/malam tapi tetap fleksibel (bukan jam wajib)
+    const prioritas = prioritasEksp ? (100+prioritasEksp) : (prioritasWaktu || 50);
+    return { r:r, seq: info?info.seq:9999, ketemu:!!info, karton:karton, prioritas:prioritas };
   });
-  // urut by sequence (kecil dulu), lalu karton
-  list.sort((a,b)=> a.seq-b.seq || b.karton-a.karton);
+  // urut: prioritas dulu (Pagi→Siang→Malam→...→UFF paling akhir), lalu seq asli, lalu karton
+  list.sort((a,b)=> a.prioritas-b.prioritas || a.seq-b.seq || b.karton-a.karton);
 
-  // pisahkan: item dg ekspedisi yg dipetakan ke sekuen khusus (dijadwal TERPISAH,
-  // mulai dari jam sekuen itu) vs item biasa (jadwal default mulai MUAT_MULAI)
-  const biasa = list.filter(x=>!x.sekuenTarget);
-  const perSekuen = {}; // { 1:[...], 2:[...], 3:[...] }
-  list.forEach(x=>{ if(x.sekuenTarget){ (perSekuen[x.sekuenTarget]=perSekuen[x.sekuenTarget]||[]).push(x); } });
-
-  function jadwalkan(daftar, jamMulai){
-    const jalur=[jamMulai, jamMulai]; // 2 jalur paralel
-    daftar.forEach(item=>{
-      if(!item.ketemu){
-        item.r.jam='CEK MANUAL';
-        item.r.jamMuatAuto=true;
-        return;
-      }
-      const idx = jalur[0]<=jalur[1] ? 0 : 1;
-      const mulai = jalur[idx];
-      item.r.jam = menitKeJam(mulai); // tanggal (r.tgl) TIDAK disentuh
-      item.r.jamMuatAuto = true;
-      jalur[idx] = mulai + durasiItem(item, mode, kpj, target);
-    });
-  }
-
-  jadwalkan(biasa, MUAT_MULAI);
-  Object.keys(perSekuen).forEach(sk=>{
-    jadwalkan(perSekuen[sk], SEKUEN_JAM[sk] || MUAT_MULAI);
+  const jalur=[MUAT_MULAI, MUAT_MULAI]; // 2 jalur paralel, dipakai BERSAMA sepanjang hari
+  const lelangJamBaru=[]; // {draft_id, jam} — utk disimpan langsung ke sheet
+  list.forEach(item=>{
+    if(!item.ketemu){
+      item.r.jam='CEK MANUAL';
+      item.r.jamMuatAuto=true;
+      return;
+    }
+    const idx = jalur[0]<=jalur[1] ? 0 : 1;
+    const mulai = jalur[idx];
+    item.r.jam = menitKeJam(mulai); // tanggal (r.tgl) TIDAK disentuh
+    item.r.jamMuatAuto = true;
+    jalur[idx] = mulai + durasiItem(item, mode, kpj, target);
+    // order lelang tak tampil di tabel → simpan jam-nya LANGSUNG ke sheet
+    if(item.r.draft_id && lelangRows.indexOf(item.r)>=0){
+      lelangJamBaru.push({draft_id:item.r.draft_id, jam:item.r.jam});
+    }
   });
+  simpanJamLelang(lelangJamBaru);
 
   renderRows();
+}
+// simpan jam hasil hitung utk order lelang langsung ke Planning Draft (satu per satu, ringan)
+function simpanJamLelang(list){
+  if(!list.length) return;
+  list.forEach(it=>{
+    gasJSONP('action=updatedraft&draft_id='+encodeURIComponent(it.draft_id)+'&field=jam&value='+encodeURIComponent(it.jam));
+  });
 }
 
 // Auto-load data planning (No, Tanggal, Destination, Truck) dari sheet
@@ -1811,6 +1822,16 @@ function kirimBatch(){
   const noKeys=Object.keys(perNo);
   const ts=new Date().toLocaleString('id-ID');
 
+  // buka jendela KOSONG dulu (sinkron, dipicu klik langsung → tak diblokir
+  // popup blocker), baru arahkan ke WA SETELAH simpan+hapus draft selesai.
+  // Ini penting terutama di HP: begitu pindah ke app WhatsApp, browser sering
+  // menghentikan sementara proses yang masih jalan di tab sebelumnya — kalau
+  // WA dibuka SEBELUM hapus draft selesai, proses hapusnya bisa terputus.
+  const hp = waNomorEksp(b.eksp);
+  const waUrl = 'https://wa.me/'+(hp||'')+'?text='+encodeURIComponent(b.msg);
+  lastWA = { url: waUrl, msg: b.msg, eksp: b.eksp, hp: hp };
+  const waWin = window.open('about:blank','_blank');
+
   // kirim SATU PER SATU berurutan (BUKAN bersamaan — GAS bisa gagal diam-diam
   // kalau dikirim serentak banyak sekaligus), dengan percobaan ulang kalau gagal.
   const gagal=[];
@@ -1823,31 +1844,39 @@ function kirimBatch(){
     const berhasilItems = (b.items||[]).filter(r=> !gagalSet.has(noMap[r.id]));
     const gagalItems = (b.items||[]).filter(r=> gagalSet.has(noMap[r.id]));
     const draftIds = berhasilItems.filter(r=>r.isDraft && r.draft_id).map(r=>r.draft_id);
-    if(draftIds.length){
-      gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')));
-    }
     const berhasilIds = new Set(berhasilItems.map(r=>r.id));
-    rows = rows.filter(r=> !berhasilIds.has(r.id));
-    renderRows();
 
-    if(gagal.length){
-      alert('⚠️ '+gagal.length+' dari '+noKeys.length+' order GAGAL tersimpan:\n\n'+gagal.join('\n')+
-            '\n\nOrder ini TETAP ADA di planning (tidak hilang) — tinggal pilih ekspedisi & kirim ulang, tak perlu input ulang.');
-      setHargaStatus('⚠️ '+gagal.length+' order gagal tersimpan — tetap ada di planning');
-      toast(gagal.length+' order gagal, cek planning','err');
-    }else{
-      setHargaStatus('✓ Semua order tersimpan');
-      toast('Order tersimpan & WA dibuka','ok');
-    }
+    hapusDraftRetry(draftIds, function(){
+      rows = rows.filter(r=> !berhasilIds.has(r.id));
+      renderRows();
+
+      // BARU sekarang arahkan jendela ke WA — hapus draft sudah pasti selesai duluan
+      if(waWin && !waWin.closed) waWin.location.href = waUrl;
+      else window.open(waUrl,'_blank'); // fallback kalau jendela kosong tadi gagal dibuka
+      tampilKirimUlang();
+
+      if(gagal.length){
+        alert('⚠️ '+gagal.length+' dari '+noKeys.length+' order GAGAL tersimpan:\n\n'+gagal.join('\n')+
+              '\n\nOrder ini TETAP ADA di planning (tidak hilang) — tinggal pilih ekspedisi & kirim ulang, tak perlu input ulang.');
+        setHargaStatus('⚠️ '+gagal.length+' order gagal tersimpan — tetap ada di planning');
+        toast(gagal.length+' order gagal, cek planning','err');
+      }else{
+        setHargaStatus('✓ Semua order tersimpan');
+        toast('Order tersimpan & WA dibuka','ok');
+      }
+    });
   });
-
-  // buka WA (dipicu klik langsung → tidak diblokir)
-  const hp = waNomorEksp(b.eksp);
-  const waUrl = 'https://wa.me/'+(hp||'')+'?text='+encodeURIComponent(b.msg);
-  // simpan untuk kirim ulang kalau chat hilang (sinyal jelek)
-  lastWA = { url: waUrl, msg: b.msg, eksp: b.eksp, hp: hp };
-  window.open(waUrl,'_blank');
-  tampilKirimUlang();
+}
+// hapus draft di sheet dgn percobaan ulang (maks 2x) — jgn sampai draft
+// tertinggal walau order-nya sendiri sukses tersimpan
+function hapusDraftRetry(draftIds, selesai, percobaan){
+  percobaan = percobaan || 0;
+  if(!draftIds.length){ selesai(); return; }
+  gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')), function(resp){
+    if(resp && resp.status!=='error'){ selesai(); }
+    else if(percobaan < 2){ setTimeout(()=> hapusDraftRetry(draftIds, selesai, percobaan+1), 1200); }
+    else { selesai(); } // sudah dicoba 3x, lanjut saja (jangan macet); draft bisa dibersihkan manual kalau perlu
+  });
 }
 
 // ==== KIRIM ULANG WA (kalau chat hilang karena sinyal) ====
@@ -1937,7 +1966,7 @@ function loadFromSheet(silent){
 
 // muat draft dari tab Planning Draft (multi-admin)
 function loadDraft(silent){
-  gasJSONP('action=getdraft', function(resp){
+  gasJSONP('action=getdraft&showAll=1', function(resp){
     if(!resp || !resp.items){ if(!silent) loadFromSheet(true); return; }
     // simpan info multidrop & pilihan lokal (by draft_id) sebelum reload
     const prev={};
@@ -1945,10 +1974,13 @@ function loadDraft(silent){
       prev[r.draft_id]={ dropGroup:r.dropGroup, biayaDrop:r.biayaDrop, jam:r.jam, tipe:r.tipe, pilihEksp:r.pilihEksp, pilihHarga:r.pilihHarga };
     });
     let maxDrop=0;
-    const draftRows = resp.items.map(it=>{
+    // pisahkan: "Draft" tampil di tabel, "Dari Lelang" CUMA ikut hitung jam (tak tampil)
+    const draftRows = [];
+    lelangRows = [];
+    resp.items.forEach(it=>{
       const p=prev[it.draft_id]||{};
       if(p.dropGroup) maxDrop=Math.max(maxDrop, p.dropGroup);
-      return {
+      const obj = {
         id: ++rowSeq,
         draft_id: it.draft_id,
         tuj: it.tuj||'',
@@ -1965,14 +1997,22 @@ function loadDraft(silent){
         biayaDrop: p.biayaDrop || 0,
         isDraft:true
       };
+      // order lelang yg SUDAH punya jam (pernah dihitung sebelumnya) dikunci —
+      // tak dihitung ulang, supaya jadwal yg sudah dikabari ke ekspedisi stabil.
+      if(String(it.dstatus||'').toLowerCase()==='dari lelang'){
+        obj._jamTerkunci = !!(it.jam);
+        lelangRows.push(obj);
+      } else draftRows.push(obj);
     });
     if(maxDrop>dropSeq) dropSeq=maxDrop; // jaga nomor grup tidak bentrok
     // HANYA tampilkan draft (belum dikirim). Order yang sudah dikirim tidak
     // ditampilkan lagi di planning agar tidak berpotensi double order.
+    // Order dari LELANG tak ditampilkan di tabel (ekspedisi sudah pasti dari
+    // sana), tapi TETAP ikut dihitung jam-nya (jalur sama) via hitungJamMuat.
     rows = draftRows;
     renderRows();
     setLastSync();
-    hitungJamMuat(); // isi jam muat otomatis
+    hitungJamMuat(); // isi jam muat otomatis (gabung draft + lelang)
   });
 }
 
@@ -2034,10 +2074,11 @@ document.addEventListener('DOMContentLoaded',()=>{
       </div>
 
       <div style="margin-top:20px;border-top:1px dashed var(--border2);padding-top:16px">
-        <div class="sec-lbl">Sekuen Khusus per Ekspedisi</div>
+        <div class="sec-lbl">Prioritas Sekuen per Ekspedisi</div>
         <p style="font-family:var(--mono);font-size:10.5px;color:var(--text3);margin-bottom:10px">
-          Sekuen 1: 07:00–15:00 · Sekuen 2: 15:00–23:00 · Sekuen 3: 23:00–07:00 (besok).
-          Ekspedisi yg dipetakan di sini dijadwalkan MULAI dari jam sekuennya (tanggal muat tetap sesuai rencana).
+          Jadwal PAKAI 1 JALUR BERSAMA sepanjang hari (bukan jam wajib ditunggu).
+          Urutan diproses: label tabel master Pagi → Siang → Malam, LALU ekspedisi di bawah ini PALING AKHIR.
+          Kalau prioritas di atasnya sedikit/kosong, langsung lanjut ke berikutnya tanpa nunggu jam tertentu.
         </p>
         <div id="tabel-sekuen-eksp" style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px"></div>
         <div style="display:flex;gap:7px">
