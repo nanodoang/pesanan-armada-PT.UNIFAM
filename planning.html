@@ -186,7 +186,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div style="min-width:0">
     <div style="font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)">PT. UNIFAM</div>
     <h1>Planning Armada</h1>
-    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v105</span></p>
+    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v106</span></p>
     <p id="harga-status" style="font-family:var(--mono);font-size:10px;color:#8FDCC7;margin-top:2px"></p>
     <p id="last-sync" style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -811,7 +811,7 @@ function hapusDraftTanggalLalu(tglList, done){
 }
 
 // kirim draft per potong kecil (2 order/kirim) supaya URL tidak kepanjangan
-function simpanDraftBatch(list, mulai, sukses, percobaan){
+function simpanDraftBatch(list, mulai, sukses, percobaan, reqId){
   const UKURAN = 6; // order per request (dikurangi jumlah round-trip drpd 2)
   percobaan = percobaan || 0;
   if(mulai >= list.length){
@@ -819,14 +819,18 @@ function simpanDraftBatch(list, mulai, sukses, percobaan){
     loadDraft();
     return;
   }
+  // reqId TETAP SAMA sepanjang percobaan ulang batch ini (idempotency key) —
+  // supaya server tahu ini permintaan yang SAMA kalau retry, bukan batch baru.
+  if(!reqId) reqId = 'batch'+mulai+'_'+Date.now()+'_'+Math.floor(Math.random()*100000);
   const potong = list.slice(mulai, mulai+UKURAN);
-  gasJSONP('action=adddraft&items='+encodeURIComponent(JSON.stringify(potong)), function(resp){
+  gasJSONP('action=adddraft&reqId='+encodeURIComponent(reqId)+'&items='+encodeURIComponent(JSON.stringify(potong)), function(resp){
     if(resp && resp.status==='ok'){
       simpanDraftBatch(list, mulai+UKURAN, sukses+potong.length, 0);
     }else if(percobaan < 2){
-      // coba ulang otomatis (maks 2x) sebelum menyerah — sering cuma lambat/timeout sesaat
+      // coba ulang otomatis (maks 2x) sebelum menyerah — sering cuma lambat/timeout sesaat.
+      // reqId yang SAMA dikirim lagi → server tak akan tambah baris dobel.
       setHargaStatus('⏳ Percobaan ulang simpan (ke-'+(percobaan+2)+')…');
-      setTimeout(()=> simpanDraftBatch(list, mulai, sukses, percobaan+1), 1500);
+      setTimeout(()=> simpanDraftBatch(list, mulai, sukses, percobaan+1, reqId), 1500);
     }else{
       const pesan = resp ? (resp.message || JSON.stringify(resp)) : 'tidak ada respons (cek koneksi/URL GAS)';
       setHargaStatus('⚠️ Gagal simpan (order ke-'+(mulai+1)+'): '+pesan);
