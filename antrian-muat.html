@@ -74,6 +74,7 @@ tr.ditolak{background:var(--red-bg)}
     <input type="date" id="tgl-input">
     <button class="btn" onclick="muat()">Tampilkan</button>
     <button class="btn sec" onclick="hariIni()">Hari Ini</button>
+    <button class="btn sec" id="btn-hitung-ulang" onclick="hitungUlangJam()" style="border-color:var(--amber);color:var(--amber)">🔄 Hitung Ulang Jam</button>
   </div>
 
   <div id="isi"><div class="empty">Pilih tanggal, lalu klik Tampilkan</div></div>
@@ -117,6 +118,167 @@ function muat(){
   sc.src=GAS_URL+'?action=getantrian&tgl='+encodeURIComponent(tgl)+'&callback='+cb;
   sc.onerror=function(){ if(selesai)return; selesai=true; clearTimeout(to); delete window[cb]; document.getElementById('isi').innerHTML='<div class="empty">Gagal terhubung</div>'; };
   document.body.appendChild(sc);
+}
+
+// ==== HITUNG ULANG JAM MUAT (dipakai kalau ada baris "nyangkut" di jam yg sama,
+// mis. baris lama yg jam-nya kesimpan sebelum perbaikan durasi/skema jalur) ====
+function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function cleanTxt(s){ return String(s||'').replace(/[​-‏‪-‮⁦-⁩﻿]/g,'').trim(); }
+function toNumber(str){
+  if(str==null) return 0;
+  let s=String(str).replace(/Rp/gi,'').replace(/\s/g,'').trim();
+  if(!s) return 0;
+  s=s.replace(/,\d{1,2}$/,'').replace(/\./g,'').replace(/,/g,'');
+  return parseInt(s,10)||0;
+}
+function normalizeTipe(t){
+  const n=norm(t);
+  if(!n) return '';
+  const map={
+    '20 ft':'20 FT','20ft':'20 FT','20':'20 FT',
+    '20 ft c':'20 FT C','20ft c':'20 FT C','20 c':'20 FT C','20c':'20 FT C','20 ft combo':'20 FT C',
+    '40 ft':'40 FT','40ft':'40 FT','40':'40 FT','40 hq':'40 FT','40 ft hq':'40 FT',
+    'fuso 48':'FUSO 48','fuso48':'FUSO 48','fuso 46':'FUSO 46','fuso46':'FUSO 46',
+    'fuso 45':'FUSO 45','fuso45':'FUSO 45','fuso 36':'FUSO 36','fuso36':'FUSO 36',
+    'fuso 32':'FUSO 32','fuso32':'FUSO 32','fuso 27':'FUSO 27','fuso27':'FUSO 27',
+    'fuso 24':'FUSO 24','fuso24':'FUSO 24',
+    'tronton 70':'TRONTON 70','tronton70':'TRONTON 70','tronton 60':'TRONTON 60','tronton60':'TRONTON 60','tronton':'TRONTON 70',
+    'wingbox':'WINGBOX','wing box':'WINGBOX',
+    'cd 17':'CD 17','cd17':'CD 17','cd 20':'CD 20','cd20':'CD 20','cd 24':'CD 24','cd24':'CD 24'
+  };
+  return map[n] || t;
+}
+const MUAT_MULAI = 7*60;
+const KARTON_PER_JAM_DEFAULT = 1450;
+const TARGET_TIPE_DEFAULT = {
+  '20 FT':3,'20 FT C':3,'40 FT':4,'FUSO 48':2.5,'FUSO 46':2.5,'FUSO 45':2.5,'FUSO 36':2,
+  'FUSO 32':2,'FUSO 27':1.5,'FUSO 24':1.5,'TRONTON 70':3,'TRONTON 60':3,'WINGBOX':2,
+  'CD 17':1.5,'CD 20':1.5,'CD 24':1.5
+};
+// pengaturan sama persis dg planning.html (localStorage dibagi krn 1 domain sama)
+function muatSettings(){ try{ return JSON.parse(localStorage.getItem('unifam_muat_settings')||'{}'); }catch(e){ return {}; } }
+function modeMuat(){ return muatSettings().mode || 'karton'; }
+function kartonPerJam(){ return Number(muatSettings().kartonPerJam) || KARTON_PER_JAM_DEFAULT; }
+function targetTipe(){ return muatSettings().targetTipe || {}; }
+function sekuenEkspedisi(){
+  const s = muatSettings().sekuenEkspedisi;
+  return (s && Object.keys(s).length) ? s : { 'UFF': 3 };
+}
+function menitKeJam(m){
+  let mm = ((m % 1440) + 1440) % 1440;
+  const h=Math.floor(mm/60), mn=Math.round(mm%60);
+  return ('0'+h).slice(-2)+':'+('0'+mn).slice(-2);
+}
+function durasiItem(tipe, karton, mode, kpj, target){
+  const tipeR = normalizeTipe(tipe||'');
+  const jamDefaultTipe = target[tipeR] != null ? target[tipeR] : (TARGET_TIPE_DEFAULT[tipeR] != null ? TARGET_TIPE_DEFAULT[tipeR] : 2);
+  if(mode==='tipe'){ return jamDefaultTipe*60; }
+  if(!karton){ return jamDefaultTipe*60; }
+  return (karton/kpj)*60;
+}
+let seqMap={};
+function prosesMasterAntrian(rws){
+  if(!rws || !rws.length) return;
+  const head=rws[0].map(h=>norm(h));
+  let iN=head.findIndex(h=>h.includes('delivery')||h.includes('distributor')||h.includes('dist name')||h.includes('nama'));
+  let iS=head.findIndex(h=>h.includes('seq'));
+  if(iN<0)iN=0; if(iS<0)iS=1;
+  seqMap={};
+  rws.slice(1).forEach(r=>{
+    const nama=cleanTxt(r[iN]||'');
+    const seqRaw=cleanTxt(r[iS]||'');
+    if(!nama) return;
+    const mAngka=seqRaw.match(/(\d+)/);
+    const seq=mAngka?parseInt(mAngka[1],10):999;
+    const waktu=/malam/i.test(seqRaw)?'malam':(/siang/i.test(seqRaw)?'siang':(/pagi/i.test(seqRaw)?'pagi':''));
+    seqMap[norm(nama)]={seq:seq, waktu:waktu, raw:seqRaw};
+  });
+}
+function loadMasterAntrian(cb){
+  const gcb='cbMasterAnt'+Date.now();
+  let selesai=false;
+  const to=setTimeout(()=>{ if(selesai)return; selesai=true; cb(); },8000);
+  window[gcb]=function(resp){
+    if(selesai)return; selesai=true; clearTimeout(to);
+    delete window[gcb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status==='ok' && resp.rows && resp.rows.length){ prosesMasterAntrian(resp.rows); }
+    cb();
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getmaster&callback='+gcb;
+  sc.onerror=function(){ if(selesai)return; selesai=true; clearTimeout(to); delete window[gcb]; cb(); };
+  document.body.appendChild(sc);
+}
+function hitungUlangJam(){
+  if(!DATA.length){ alert('Tidak ada data utk dihitung ulang. Tampilkan tanggal dulu.'); return; }
+  if(!confirm('Hitung ulang jam muat SEMUA order di tanggal ini (termasuk yg sdh terkirim/dikonfirmasi)?\n\nJam yg sdh dikirim ke ekspedisi lewat WA bisa BERUBAH. Lanjutkan?')) return;
+  const btn=document.getElementById('btn-hitung-ulang');
+  btn.disabled=true; btn.textContent='Menghitung…';
+  loadMasterAntrian(function(){
+    if(!Object.keys(seqMap).length){
+      alert('Gagal memuat data master (sekuen pagi/siang/malam). Coba lagi.');
+      btn.disabled=false; btn.textContent='🔄 Hitung Ulang Jam';
+      return;
+    }
+    const mode=modeMuat(), kpj=kartonPerJam(), target=targetTipe(), sekuenMap=sekuenEkspedisi();
+    const WAKTU_SEKUEN={pagi:1, siang:2, malam:3};
+    const list=DATA.map(o=>{
+      const info=seqMap[norm(o.tuj)];
+      const karton=toNumber(o.total)||0;
+      const eksp=String(o.ekspedisi||'').toUpperCase().trim();
+      const prioritasEksp = eksp && sekuenMap[eksp] ? sekuenMap[eksp] : null;
+      const prioritasWaktu = (info && info.waktu && WAKTU_SEKUEN[info.waktu]) ? WAKTU_SEKUEN[info.waktu] : null;
+      const prioritas = prioritasEksp ? (100+prioritasEksp) : (prioritasWaktu || 50);
+      return { o:o, seq: info?info.seq:9999, ketemu:!!info, karton:karton, prioritas:prioritas };
+    });
+    list.sort((a,b)=> a.prioritas-b.prioritas || a.seq-b.seq || b.karton-a.karton);
+    const jalur=[MUAT_MULAI, MUAT_MULAI];
+    const perubahan=[];
+    list.forEach(item=>{
+      if(!item.ketemu){ item.o.jam='CEK MANUAL'; return; }
+      const idx = jalur[0]<=jalur[1] ? 0 : 1;
+      const mulai = jalur[idx];
+      const jamBaru = menitKeJam(mulai);
+      if(jamBaru !== item.o.jam){ perubahan.push({draft_id:item.o.draft_id, jam:jamBaru}); }
+      item.o.jam = jamBaru;
+      jalur[idx] = mulai + durasiItem(item.o.tipe, item.karton, mode, kpj, target);
+    });
+    render();
+    if(!perubahan.length){ btn.disabled=false; btn.textContent='🔄 Hitung Ulang Jam'; toastSimpan('Tidak ada yg berubah'); return; }
+    btn.textContent='Menyimpan 0/'+perubahan.length+'…';
+    simpanJamBerurutan(perubahan, 0, btn, function(){
+      btn.disabled=false; btn.textContent='🔄 Hitung Ulang Jam';
+      toastSimpan(perubahan.length+' jam berhasil diperbarui');
+      muat(); // muat ulang dari server biar konsisten
+    });
+  });
+}
+function simpanJamBerurutan(list, idx, btn, selesai, percobaan){
+  percobaan=percobaan||0;
+  if(idx>=list.length){ selesai(); return; }
+  btn.textContent='Menyimpan '+(idx+1)+'/'+list.length+'…';
+  const it=list[idx];
+  const gcb='cbSaveJam'+Date.now()+'_'+idx;
+  let done=false;
+  const to=setTimeout(()=>{ if(done)return; done=true; delete window[gcb]; lanjut(); },15000);
+  window[gcb]=function(resp){
+    if(done)return; done=true; clearTimeout(to); delete window[gcb];
+    if(sc.parentNode) sc.parentNode.removeChild(sc);
+    if(resp && resp.status!=='error'){ simpanJamBerurutan(list, idx+1, btn, selesai, 0); }
+    else if(percobaan<2){ setTimeout(()=>simpanJamBerurutan(list, idx, btn, selesai, percobaan+1), 1000); }
+    else { simpanJamBerurutan(list, idx+1, btn, selesai, 0); }
+  };
+  function lanjut(){ if(percobaan<2){ simpanJamBerurutan(list, idx, btn, selesai, percobaan+1); } else { simpanJamBerurutan(list, idx+1, btn, selesai, 0); } }
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=updatedraft&draft_id='+encodeURIComponent(it.draft_id)+'&field=jam&value='+encodeURIComponent(it.jam)+'&callback='+gcb;
+  document.body.appendChild(sc);
+}
+function toastSimpan(msg){
+  const el=document.createElement('div');
+  el.textContent=msg;
+  el.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;font-family:var(--sans);font-size:13px;z-index:200;box-shadow:0 4px 14px rgba(0,0,0,.25)';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 3000);
 }
 
 function pesanReminder(o){
