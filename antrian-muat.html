@@ -214,7 +214,7 @@ function hitungUlangJam(){
   if(!confirm('Hitung ulang jam muat SEMUA order di tanggal ini (termasuk yg sdh terkirim/dikonfirmasi)?\n\nJam yg sdh dikirim ke ekspedisi lewat WA bisa BERUBAH. Lanjutkan?')) return;
   const btn=document.getElementById('btn-hitung-ulang');
   btn.disabled=true; btn.textContent='Menghitung…';
-  loadMasterAntrian(function(){
+  tarikSettingsAntrian(function(){ loadMasterAntrian(function(){
     if(!Object.keys(seqMap).length){
       alert('Gagal memuat data master (sekuen pagi/siang/malam). Coba lagi.');
       btn.disabled=false; btn.textContent='🔄 Hitung Ulang Jam';
@@ -251,7 +251,27 @@ function hitungUlangJam(){
       toastSimpan(perubahan.length+' jam berhasil diperbarui');
       muat(); // muat ulang dari server biar konsisten
     });
-  });
+  }); });
+}
+// ambil pengaturan terbaru dari server (dibagi semua perangkat), simpan ke localStorage
+function tarikSettingsAntrian(cb){
+  const gcb='cbSet'+Date.now();
+  let selesai=false;
+  const to=setTimeout(()=>{ if(selesai)return; selesai=true; cb(); },8000);
+  window[gcb]=function(resp){
+    if(selesai)return; selesai=true; clearTimeout(to);
+    delete window[gcb]; if(sc.parentNode) sc.parentNode.removeChild(sc);
+    try{
+      if(resp && resp.status==='ok' && resp.settings && (resp.settings.ts||0) >= (muatSettings().ts||0)){
+        localStorage.setItem('unifam_muat_settings', JSON.stringify(resp.settings));
+      }
+    }catch(e){}
+    cb();
+  };
+  const sc=document.createElement('script');
+  sc.src=GAS_URL+'?action=getsettings&callback='+gcb;
+  sc.onerror=function(){ if(selesai)return; selesai=true; clearTimeout(to); delete window[gcb]; cb(); };
+  document.body.appendChild(sc);
 }
 function simpanJamBerurutan(list, idx, btn, selesai, percobaan){
   percobaan=percobaan||0;
