@@ -296,7 +296,7 @@ body{padding-bottom:150px}
   <div style="min-width:0">
     <div style="font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)">PT. UNIFAM</div>
     <h1>Planning Armada</h1>
-    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v113</span></p>
+    <p>Bandingkan rate &amp; kirim per ekspedisi <span style="opacity:.7">· v115</span></p>
     <p id="harga-status" style="font-family:var(--mono);font-size:10px;color:#8FDCC7;margin-top:2px"></p>
     <p id="last-sync" style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);margin-top:0"></p>
   </div>
@@ -1948,6 +1948,7 @@ function simpanBerurutan(noKeys, idx, perNo, b, ts, gagal, selesai, percobaan){
     '&ekspedisi='+encodeURIComponent(b.eksp)+
     '&orderRows='+encodeURIComponent(JSON.stringify(perNo[no]))+
     '&catatan='+encodeURIComponent('via Planning')+
+    '&draft_ids='+encodeURIComponent(((b.items||[]).filter(function(r){return r.isDraft && r.draft_id && (b.itemNoMap||{})[r.id]===no;}).map(function(r){return r.draft_id;})).join(','))+
     '&timestamp='+encodeURIComponent(ts),
     function(resp){
       if(resp && resp.status!=='error'){
@@ -1961,16 +1962,10 @@ function simpanBerurutan(noKeys, idx, perNo, b, ts, gagal, selesai, percobaan){
     });
 }
 
-function kirimBatch(){
+function kirimBatch(onlyNos){
   if(!currentBatch){ toast('Pilih ekspedisi dulu','err'); return; }
   const b=currentBatch;
-
-  // Simpan JAM yang dipakai saat kirim ke kolom Jam di Planning Draft.
-  // hitungJamMuat() cuma hitung utk tampilan layar, tak pernah tersimpan ke
-  // sheet kecuali dropdown jam diubah manual — jadi harus dipaksa simpan di sini.
-  (b.items||[]).forEach(function(r){
-    if(r.isDraft && r.draft_id && r.jam){ updateDraftField(r,'jam'); }
-  });
+  hapusGagalBox();
 
   // Pecah orderRows PER No Order → tiap request pendek (hindari URL kepanjangan)
   const perNo={};
@@ -1978,47 +1973,58 @@ function kirimBatch(){
     const no=r.no_order||b.noOrd||'';
     (perNo[no]=perNo[no]||[]).push(r);
   });
-  const noKeys=Object.keys(perNo);
+  let noKeys=Object.keys(perNo);
+  if(Array.isArray(onlyNos)) noKeys=noKeys.filter(n=>onlyNos.indexOf(n)>=0);
+  const noMap0=b.itemNoMap||{};
+  if(!Array.isArray(onlyNos)){
+    // simpan JAM saat kirim (hanya pertama kali)
+    (b.items||[]).forEach(function(r){
+      if(r.isDraft && r.draft_id && r.jam){ updateDraftField(r,'jam'); }
+    });
+  }
   const ts=new Date().toLocaleString('id-ID');
 
-  // buka jendela KOSONG dulu (sinkron, dipicu klik langsung → tak diblokir
-  // popup blocker), baru arahkan ke WA SETELAH simpan+hapus draft selesai.
-  // Ini penting terutama di HP: begitu pindah ke app WhatsApp, browser sering
-  // menghentikan sementara proses yang masih jalan di tab sebelumnya — kalau
-  // WA dibuka SEBELUM hapus draft selesai, proses hapusnya bisa terputus.
   const hp = waNomorEksp(b.eksp);
   const waUrl = 'https://wa.me/'+(hp||'')+'?text='+encodeURIComponent(b.msg);
   lastWA = { url: waUrl, msg: b.msg, eksp: b.eksp, hp: hp };
+  // jendela kosong dibuka sinkron (anti popup-blocker); WA hanya dibuka kalau SEMUA berhasil
   const waWin = window.open('about:blank','_blank');
 
-  // kirim SATU PER SATU berurutan (BUKAN bersamaan — GAS bisa gagal diam-diam
-  // kalau dikirim serentak banyak sekaligus), dengan percobaan ulang kalau gagal.
   const gagal=[];
   setHargaStatus('Menyimpan order 1/'+noKeys.length+'…');
   simpanBerurutan(noKeys, 0, perNo, b, ts, gagal, function(){
-    // hapus draft HANYA untuk No Order yang BERHASIL tersimpan.
-    // Yang gagal TETAP ada di planning (draft utuh) — tak perlu input ulang.
     const gagalSet = new Set(gagal);
-    const noMap = b.itemNoMap || {};
-    const berhasilItems = (b.items||[]).filter(r=> !gagalSet.has(noMap[r.id]));
-    const gagalItems = (b.items||[]).filter(r=> gagalSet.has(noMap[r.id]));
+    const noSet = new Set(noKeys);
+    const berhasilItems = (b.items||[]).filter(r=> noSet.has(noMap0[r.id]) && !gagalSet.has(noMap0[r.id]));
     const draftIds = berhasilItems.filter(r=>r.isDraft && r.draft_id).map(r=>r.draft_id);
     const berhasilIds = new Set(berhasilItems.map(r=>r.id));
 
-    hapusDraftRetry(draftIds, function(){
+    hapusDraftRetry(draftIds, function(delOk){
       rows = rows.filter(r=> !berhasilIds.has(r.id));
       renderRows();
 
-      // BARU sekarang arahkan jendela ke WA — hapus draft sudah pasti selesai duluan
-      if(waWin && !waWin.closed) waWin.location.href = waUrl;
-      else window.open(waUrl,'_blank'); // fallback kalau jendela kosong tadi gagal dibuka
-      tampilKirimUlang();
-
       if(gagal.length){
-        alert('⚠️ '+gagal.length+' dari '+noKeys.length+' order GAGAL tersimpan:\n\n'+gagal.join('\n')+
-              '\n\nOrder ini TETAP ADA di planning (tidak hilang) — tinggal pilih ekspedisi & kirim ulang, tak perlu input ulang.');
-        setHargaStatus('⚠️ '+gagal.length+' order gagal tersimpan — tetap ada di planning');
-        toast(gagal.length+' order gagal, cek planning','err');
+        // ada order GAGAL → jangan buka WA, tampilkan peringatan + tombol ulangi
+        try{ if(waWin && !waWin.closed) waWin.close(); }catch(e){}
+        setHargaStatus('⚠️ '+gagal.length+' order gagal tersimpan');
+        toast('⚠️ '+gagal.length+' order GAGAL terkirim','err');
+        tampilGagalBox('⚠️ '+gagal.length+' dari '+noKeys.length+' order GAGAL tersimpan',
+          'Pesan WA <b>belum dikirim</b>. Order berikut masih ada di planning:<br><b>'+
+          gagal.map(g=>String(g).replace(/[<>&]/g,'')).join('<br>')+'</b>',
+          function(){ kirimBatch(gagal.slice()); });
+        return;
+      }
+      if(waWin && !waWin.closed) waWin.location.href = waUrl;
+      else window.open(waUrl,'_blank');
+      tampilKirimUlang();
+      if(!delOk){
+        toast('⚠️ Order tersimpan, tapi status draft belum terupdate','err');
+        tampilGagalBox('⚠️ Order tersimpan & WA dibuka, tapi status draft di sheet belum jadi "Terkirim"',
+          'Klik ulangi untuk memperbarui status draft.',
+          function(){ hapusGagalBox(); hapusDraftRetry(draftIds,function(ok2){
+            if(ok2){ toast('Status draft diperbarui','ok'); loadDraft(); }
+            else tampilGagalBox('⚠️ Masih gagal memperbarui status draft','Cek koneksi lalu ulangi.',function(){ hapusGagalBox(); hapusDraftRetry(draftIds,function(){loadDraft();}); });
+          }); });
       }else{
         setHargaStatus('✓ Semua order tersimpan');
         toast('Order tersimpan & WA dibuka','ok');
@@ -2026,17 +2032,45 @@ function kirimBatch(){
     });
   });
 }
-// hapus draft di sheet dgn percobaan ulang (maks 2x) — jgn sampai draft
-// tertinggal walau order-nya sendiri sukses tersimpan
+function hapusGagalBox(){ const x=document.getElementById('gagal-box'); if(x) x.remove(); }
+function tampilGagalBox(judul, isi, retryFn){
+  hapusGagalBox();
+  const box=document.createElement('div');
+  box.id='gagal-box';
+  box.style.cssText='position:fixed;left:12px;right:12px;top:12px;z-index:3000;background:#FEF2F2;border:2px solid #DC2626;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.3);padding:14px;max-width:460px;margin:0 auto';
+  box.innerHTML='<div style="font-size:14px;font-weight:800;color:#B91C1C;margin-bottom:6px">'+judul+'</div>'+
+    '<div style="font-size:12px;color:#7F1D1D;margin-bottom:10px">'+isi+'</div>'+
+    '<div style="display:flex;gap:8px"><button id="gagal-retry" style="flex:1;background:#DC2626;color:#fff;border:none;padding:10px;border-radius:8px;font-weight:800;cursor:pointer">🔁 Ulangi Kirim</button>'+
+    '<button onclick="hapusGagalBox()" style="background:#fff;border:1px solid #DC2626;color:#B91C1C;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer">Tutup</button></div>';
+  document.body.appendChild(box);
+  document.getElementById('gagal-retry').onclick=retryFn;
+}
+// hapus draft di sheet dgn percobaan ulang (maks 3x); selesai(ok)
 function hapusDraftRetry(draftIds, selesai, percobaan){
   percobaan = percobaan || 0;
-  if(!draftIds.length){ selesai(); return; }
+  if(!draftIds.length){ selesai(true); return; }
   gasJSONP('action=deldraft&draft_id='+encodeURIComponent(draftIds.join(',')), function(resp){
-    if(resp && resp.status!=='error'){ selesai(); }
+    if(resp && resp.status!=='error' && resp.updated>0){ selesai(true); }
+    else if(resp && resp.status!=='error' && percobaan>=1){ selesai(true); } // server balas ok
     else if(percobaan < 2){ setTimeout(()=> hapusDraftRetry(draftIds, selesai, percobaan+1), 1200); }
-    else { selesai(); } // sudah dicoba 3x, lanjut saja (jangan macet); draft bisa dibersihkan manual kalau perlu
+    else {
+      try{
+        const q=JSON.parse(localStorage.getItem('unifam_pending_deldraft')||'[]');
+        draftIds.forEach(function(d){ if(q.indexOf(d)<0) q.push(d); });
+        localStorage.setItem('unifam_pending_deldraft', JSON.stringify(q));
+      }catch(e){}
+      selesai(false);
+    }
   });
 }
+function ulangDelDraftPending(){
+  let q=[]; try{ q=JSON.parse(localStorage.getItem('unifam_pending_deldraft')||'[]'); }catch(e){}
+  if(!q.length) return;
+  gasJSONP('action=deldraft&draft_id='+encodeURIComponent(q.join(',')), function(resp){
+    if(resp && resp.status!=='error'){ try{localStorage.removeItem('unifam_pending_deldraft');}catch(e){} if(typeof loadDraft==='function') loadDraft(); }
+  });
+}
+window.addEventListener('load', function(){ setTimeout(ulangDelDraftPending, 1500); });
 
 // ==== KIRIM ULANG WA (kalau chat hilang karena sinyal) ====
 let lastWA = null;
